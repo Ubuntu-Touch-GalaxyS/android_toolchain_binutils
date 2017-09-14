@@ -50,6 +50,10 @@
 
 #include <string.h>
 
+#ifdef __MACH__
+#undef HAVE_SBRK
+#endif
+
 #ifdef HAVE_SBRK
 #if !HAVE_DECL_SBRK
 extern void *sbrk ();

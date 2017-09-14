@@ -38,6 +38,10 @@
 #include "bucomm.h"
 #include "plugin.h"
 
+#ifdef __MACH__
+#undef HAVE_SBRK
+#endif
+
 /* When sorting by size, we use this structure to hold the size and a
    pointer to the minisymbol.  */
 

@@ -46,6 +46,10 @@
 #define itbl_init()
 #endif
 
+#ifdef __MACH__
+#undef HAVE_SBRK
+#endif
+
 #ifdef HAVE_SBRK
 #ifdef NEED_DECLARATION_SBRK
 extern void *sbrk ();
