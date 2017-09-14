@@ -605,8 +605,10 @@ queue_middle_tasks(const General_options& options,
       if ((segment_size + est_size_of_got_and_dynamic)
 	  >= target->max_pie_data_segment_size())
 	{
-	  gold_info(_("Disabling PIE for this link.  The estimated data segment"
-		      " size (%ld > %ld) would exceed the safe limits for PIE."),
+	  gold_info(
+	    _("Disabling PIE for this link.  The estimated data segment size"
+	      " (%" PRIu64 " > %" PRIu64 ") would exceed the safe limits for"
+	      " PIE."),
 		    (segment_size + est_size_of_got_and_dynamic),
 		    target->max_pie_data_segment_size());
 	  const_cast<General_options*>

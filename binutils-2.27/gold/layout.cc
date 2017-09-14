@@ -2816,7 +2816,7 @@ Layout::finalize(const Input_objects* input_objects, Symbol_table* symtab,
 
       if (data_seg_size >= target->max_pie_data_segment_size())
 	gold_warning(
-	  _("Unsafe PIE data segment size (%ld > %ld). "
+	  _("Unsafe PIE data segment size (%" PRIu64 " > %" PRIu64 "). "
 	    "For kernels with CONFIG_ARCH_BINFMT_ELF_RANDOMIZE_PIE enabled, "
 	    "load_elf_binary() attempts to map a PIE binary into an address "
 	    "range immediately below mm->mmap_base. The first PT_LOAD segment "
