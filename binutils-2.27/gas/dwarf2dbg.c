@@ -44,6 +44,7 @@
 
 #include "dwarf2dbg.h"
 #include <filenames.h>
+#include <stdint.h>
 
 #include "hash.h"
 
@@ -1878,7 +1879,7 @@ add_to_string_table (struct string_table *strtab, const char *str)
       strtab->hashtab = hash_new ();
     }
 
-  val = (offsetT) hash_find (strtab->hashtab, str);
+  val = (offsetT) (uintptr_t)hash_find (strtab->hashtab, str);
   if (val != 0)
     return val;
 
@@ -1896,7 +1897,7 @@ add_to_string_table (struct string_table *strtab, const char *str)
 
   key = xstrdup (str);
   val = strtab->next_offset;
-  hash_insert (strtab->hashtab, key, (void *) val);
+  hash_insert (strtab->hashtab, key, (void *) (uintptr_t)val);
   strtab->strings[strtab->strings_in_use++] = key;
   strtab->next_offset += strlen(key) + 1;
   return val;
