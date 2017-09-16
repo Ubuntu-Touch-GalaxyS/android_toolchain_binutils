@@ -5739,12 +5739,13 @@ elf32_arm_size_stubs (bfd *output_bfd,
 		  do
 		    {
 		      bfd_boolean new_stub;
+		      char *name = (char *) sym_name;
 
 		      /* Determine what (if any) linker stub is needed.  */
 		      stub_type = arm_type_of_stub (info, section, irela,
 						    st_type, &branch_type,
 						    hash, destination, sym_sec,
-						    input_bfd, sym_name);
+						    input_bfd, name);
 		      if (stub_type == arm_stub_none)
 			break;
 
@@ -5753,7 +5754,7 @@ elf32_arm_size_stubs (bfd *output_bfd,
 		      created_stub =
 			elf32_arm_create_stub (htab, stub_type, section, irela,
 					       sym_sec, hash,
-					       (char *) sym_name, sym_value,
+					       name, sym_value,
 					       branch_type, &new_stub);
 
 		      if (!created_stub)
