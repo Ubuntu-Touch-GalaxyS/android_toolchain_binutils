@@ -122,10 +122,12 @@ def configure(arch, host, install_dir, src_dir):
     cc = os.path.join(toolchain, 'bin', '{}-gcc'.format(toolchain_prefix))
     cxx = os.path.join(toolchain, 'bin', '{}-g++'.format(toolchain_prefix))
     ar = os.path.join(toolchain, 'bin', '{}-ar'.format(toolchain_prefix))
+    strip = os.path.join(toolchain, 'bin', '{}-strip'.format(toolchain_prefix))
 
     env['AR'] = ar
     env['CC'] = cc
     env['CXX'] = cxx
+    env['STRIP'] = strip
     if m32:
         env['CFLAGS'] = '-m32'
         env['CXXFLAGS'] = '-m32'
@@ -142,7 +144,7 @@ def build(jobs):
 
 def install(jobs):
     """Installs binutils."""
-    check_call(['make', 'install', '-j', str(jobs)])
+    check_call(['make', 'install-strip', '-j', str(jobs)])
 
 
 def dist(dist_dir, base_dir, package_name):
