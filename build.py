@@ -121,8 +121,15 @@ def configure(arch, host, install_dir, src_dir):
 
     cc = os.path.join(toolchain, 'bin', '{}-gcc'.format(toolchain_prefix))
     cxx = os.path.join(toolchain, 'bin', '{}-g++'.format(toolchain_prefix))
-    ar = os.path.join(toolchain, 'bin', '{}-ar'.format(toolchain_prefix))
-    strip = os.path.join(toolchain, 'bin', '{}-strip'.format(toolchain_prefix))
+
+    # Our darwin prebuilts are gcc *only*. No binutils.
+    if host == 'darwin':
+        ar = 'ar'
+        strip = 'strip'
+    else:
+        ar = os.path.join(toolchain, 'bin', '{}-ar'.format(toolchain_prefix))
+        strip = os.path.join(
+            toolchain, 'bin', '{}-strip'.format(toolchain_prefix))
 
     env['AR'] = ar
     env['CC'] = cc
