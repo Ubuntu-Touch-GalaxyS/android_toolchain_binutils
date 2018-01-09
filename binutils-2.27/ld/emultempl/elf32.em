@@ -117,8 +117,21 @@ fragment <<EOF
 static void
 gld${EMULATION_NAME}_after_parse (void)
 {
+EOF
+case ${target} in
+  *-*-linux-android*)
+    # Some versions of the Android dynamic linker (e.g. N) warn on binaries
+    # with the DF_1_PIE flag, so don't set it.
+    # https://github.com/android-ndk/ndk/issues/602
+    ;;
+  *)
+    fragment <<EOF
   if (bfd_link_pie (&link_info))
     link_info.flags_1 |= (bfd_vma) DF_1_PIE;
+EOF
+    ;;
+esac
+fragment <<EOF
 
   after_parse_default ();
 }
