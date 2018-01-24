@@ -9257,6 +9257,7 @@ const struct elf_size_info elfNN_aarch64_size_info =
   sizeof (ElfNN_External_Shdr),
   sizeof (ElfNN_External_Rel),
   sizeof (ElfNN_External_Rela),
+  sizeof (ElfNN_External_Relr),
   sizeof (ElfNN_External_Sym),
   sizeof (ElfNN_External_Dyn),
   sizeof (Elf_External_Note),

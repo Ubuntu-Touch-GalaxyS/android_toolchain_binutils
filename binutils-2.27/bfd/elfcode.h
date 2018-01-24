@@ -80,6 +80,7 @@
 #define Elf_External_Phdr	NAME(Elf,External_Phdr)
 #define Elf_External_Rel	NAME(Elf,External_Rel)
 #define Elf_External_Rela	NAME(Elf,External_Rela)
+#define Elf_External_Relr	NAME(Elf,External_Relr)
 #define Elf_External_Dyn	NAME(Elf,External_Dyn)
 
 #define elf_core_file_failing_command	NAME(bfd_elf,core_file_failing_command)
@@ -1881,6 +1882,7 @@ const struct elf_size_info NAME(_bfd_elf,size_info) = {
   sizeof (Elf_External_Shdr),
   sizeof (Elf_External_Rel),
   sizeof (Elf_External_Rela),
+  sizeof (Elf_External_Relr),
   sizeof (Elf_External_Sym),
   sizeof (Elf_External_Dyn),
   sizeof (Elf_External_Note),

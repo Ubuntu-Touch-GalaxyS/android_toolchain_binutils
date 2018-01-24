@@ -1624,6 +1624,9 @@ _bfd_elf_print_private_bfd_data (bfd *abfd, void *farg)
 	    case DT_RELA: name = "RELA"; break;
 	    case DT_RELASZ: name = "RELASZ"; break;
 	    case DT_RELAENT: name = "RELAENT"; break;
+	    case DT_RELR: name = "RELR"; break;
+	    case DT_RELRSZ: name = "RELRSZ"; break;
+	    case DT_RELRENT: name = "RELRENT"; break;
 	    case DT_STRSZ: name = "STRSZ"; break;
 	    case DT_SYMENT: name = "SYMENT"; break;
 	    case DT_INIT: name = "INIT"; break;
@@ -1661,6 +1664,7 @@ _bfd_elf_print_private_bfd_data (bfd *abfd, void *farg)
 	    case DT_PLTPAD: name = "PLTPAD"; break;
 	    case DT_MOVETAB: name = "MOVETAB"; break;
 	    case DT_SYMINFO: name = "SYMINFO"; break;
+	    case DT_RELRCOUNT: name = "RELRCOUNT"; break;
 	    case DT_RELACOUNT: name = "RELACOUNT"; break;
 	    case DT_RELCOUNT: name = "RELCOUNT"; break;
 	    case DT_FLAGS_1: name = "FLAGS_1"; break;
@@ -2221,16 +2225,30 @@ bfd_section_from_shdr (bfd *abfd, unsigned int shindex)
 
     case SHT_REL:
     case SHT_RELA:
+    case SHT_RELR:
       /* *These* do a lot of work -- but build no sections!  */
       {
 	asection *target_sect;
 	Elf_Internal_Shdr *hdr2, **p_hdr;
 	unsigned int num_sec = elf_numsections (abfd);
 	struct bfd_elf_section_data *esdt;
+	bfd_size_type size;
 
-	if (hdr->sh_entsize
-	    != (bfd_size_type) (hdr->sh_type == SHT_REL
-				? bed->s->sizeof_rel : bed->s->sizeof_rela))
+	switch (hdr->sh_type)
+	{
+        case SHT_REL:
+	  size = bed->s->sizeof_rel;
+	  break;
+        case SHT_RELA:
+	  size = bed->s->sizeof_rela;
+	  break;
+        case SHT_RELR:
+	  size = bed->s->sizeof_relr;
+	  break;
+        default:
+	  goto fail;
+        }
+	if (hdr->sh_entsize  != size)
 	  goto fail;
 
 	/* Check for a bogus link to avoid crashing.  */
@@ -2296,7 +2314,8 @@ bfd_section_from_shdr (bfd *abfd, unsigned int shindex)
 	    || hdr->sh_info == SHN_UNDEF
 	    || hdr->sh_info >= num_sec
 	    || elf_elfsections (abfd)[hdr->sh_info]->sh_type == SHT_REL
-	    || elf_elfsections (abfd)[hdr->sh_info]->sh_type == SHT_RELA)
+	    || elf_elfsections (abfd)[hdr->sh_info]->sh_type == SHT_RELA
+	    || elf_elfsections (abfd)[hdr->sh_info]->sh_type == SHT_RELR)
 	  {
 	    ret = _bfd_elf_make_section_from_shdr (abfd, hdr, name,
 						   shindex);

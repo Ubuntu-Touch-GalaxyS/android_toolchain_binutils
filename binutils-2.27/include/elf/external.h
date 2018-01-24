@@ -196,6 +196,10 @@ typedef struct {
 } Elf32_External_Rela;
 
 typedef struct {
+  unsigned char r_data[4];	/* jump and bitmap for relative relocations */
+} Elf32_External_Relr;
+
+typedef struct {
   unsigned char r_offset[8];	/* Location at which to apply the action */
   unsigned char	r_info[8];	/* index and type of relocation */
 } Elf64_External_Rel;
@@ -205,6 +209,10 @@ typedef struct {
   unsigned char	r_info[8];	/* index and type of relocation */
   unsigned char	r_addend[8];	/* Constant addend used to compute value */
 } Elf64_External_Rela;
+
+typedef struct {
+  unsigned char r_data[8];	/* jump and bitmap for relative relocations */
+} Elf64_External_Relr;
 
 /* dynamic section structure */
 
