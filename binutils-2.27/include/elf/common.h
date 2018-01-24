@@ -490,6 +490,10 @@
 #define SHT_GNU_verneed	SHT_SUNW_verneed
 #define SHT_GNU_versym	SHT_SUNW_versym
 
+/* Experimental support for SHT_RELR sections. For details, see proposal
+   at https://groups.google.com/forum/#!topic/generic-abi/bX460iggiKg */
+#define SHT_RELR	0x6fffff00	/* Relative relocations, only offsets */
+
 #define SHT_LOPROC	0x70000000	/* Processor-specific semantics, lo */
 #define SHT_HIPROC	0x7FFFFFFF	/* Processor-specific semantics, hi */
 #define SHT_LOUSER	0x80000000	/* Application-specific semantics */
@@ -830,6 +834,13 @@
 
 /* This tag is a GNU extension to the Solaris version scheme.  */
 #define DT_VERSYM	0x6ffffff0
+
+/* Experimental support for SHT_RELR sections. For details, see proposal
+   at https://groups.google.com/forum/#!topic/generic-abi/bX460iggiKg */
+#define DT_RELR		0x6fffe000
+#define DT_RELRSZ	0x6fffe001
+#define DT_RELRENT	0x6fffe003
+#define DT_RELRCOUNT	0x6fffe005
 
 #define DT_LOPROC	0x70000000
 #define DT_HIPROC	0x7fffffff

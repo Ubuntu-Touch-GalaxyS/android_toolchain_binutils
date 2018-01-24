@@ -2120,6 +2120,8 @@ class Target_arm : public Sized_target<32, big_endian>
  public:
   typedef Output_data_reloc<elfcpp::SHT_REL, true, 32, big_endian>
     Reloc_section;
+  typedef Output_data_reloc<elfcpp::SHT_RELR, true, 32, big_endian>
+    Relr_section;
 
   // When were are relocating a stub, we pass this as the relocation number.
   static const size_t fake_relnum_for_stubs = static_cast<size_t>(-1);
@@ -2127,7 +2129,8 @@ class Target_arm : public Sized_target<32, big_endian>
   Target_arm(const Target::Target_info* info = &arm_info)
     : Sized_target<32, big_endian>(info),
       got_(NULL), plt_(NULL), got_plt_(NULL), got_irelative_(NULL),
-      rel_dyn_(NULL), rel_irelative_(NULL), copy_relocs_(elfcpp::R_ARM_COPY),
+      rel_dyn_(NULL), rel_irelative_(NULL), relr_dyn_(NULL),
+      copy_relocs_(elfcpp::R_ARM_COPY),
       got_mod_index_offset_(-1U), tls_base_symbol_defined_(false),
       stub_tables_(), stub_factory_(Stub_factory::get_instance()),
       should_force_pic_veneer_(false),
@@ -2520,11 +2523,17 @@ class Target_arm : public Sized_target<32, big_endian>
   void
   do_adjust_elf_header(unsigned char* view, int len);
 
-  // We only need to generate stubs, and hence perform relaxation if we are
-  // not doing relocatable linking.
   bool
   do_may_relax() const
-  { return !parameters->options().relocatable(); }
+  {
+    // If generating '.relr.dyn' section, we need a relaxation pass
+    // to do the shrinking after all the offsets have been populated.
+    if (parameters->options().experimental_use_relr())
+        return true;
+    // We need to generate stubs, and hence perform relaxation if we are
+    // not doing relocatable linking.
+    return !parameters->options().relocatable();
+  }
 
   bool
   do_relax(int, const Input_objects*, Symbol_table*, Layout*, const Task*);
@@ -2822,6 +2831,10 @@ class Target_arm : public Sized_target<32, big_endian>
   Reloc_section*
   rel_tls_desc_section(Layout*) const;
 
+  // Get the RELR dynamic reloc section, creating it if necessary.
+  Relr_section*
+  relr_dyn_section(Layout*);
+
   // Return true if the symbol may need a COPY relocation.
   // References from an executable object to non-function symbols
   // defined in a dynamic object may need a COPY relocation.
@@ -2986,6 +2999,8 @@ class Target_arm : public Sized_target<32, big_endian>
   Reloc_section* rel_dyn_;
   // The section to use for IRELATIVE relocs.
   Reloc_section* rel_irelative_;
+  // The RELR dynamic reloc section.
+  Relr_section* relr_dyn_;
   // Relocs saved to avoid a COPY reloc.
   Copy_relocs<elfcpp::SHT_REL, 32, big_endian> copy_relocs_;
   // Offset of the GOT entry for the TLS module index.
@@ -4382,6 +4397,23 @@ Target_arm<big_endian>::rel_irelative_section(Layout* layout)
 		      == this->rel_irelative_->output_section()));
     }
   return this->rel_irelative_;
+}
+
+// Get the RELR dynamic reloc section, creating it if necessary.
+
+template<bool big_endian>
+typename Target_arm<big_endian>::Relr_section*
+Target_arm<big_endian>::relr_dyn_section(Layout* layout)
+{
+  if (this->relr_dyn_ == NULL)
+    {
+      gold_assert(layout != NULL);
+      this->relr_dyn_ = new Relr_section();
+      layout->add_output_section_data(".relr.dyn", elfcpp::SHT_RELR,
+				      elfcpp::SHF_ALLOC, this->relr_dyn_,
+				      ORDER_DYNAMIC_RELOCS, false);
+    }
+  return this->relr_dyn_;
 }
 
 
@@ -8504,13 +8536,22 @@ Target_arm<big_endian>::Scan::local(Symbol_table* symtab,
       // relocate it easily.
       if (parameters->options().output_is_position_independent())
 	{
-	  Reloc_section* rel_dyn = target->rel_dyn_section(layout);
 	  unsigned int r_sym = elfcpp::elf_r_sym<32>(reloc.get_r_info());
-	  // If we are to add more other reloc types than R_ARM_ABS32,
-	  // we need to add check_non_pic(object, r_type) here.
-	  rel_dyn->add_local_relative(object, r_sym, elfcpp::R_ARM_RELATIVE,
-				      output_section, data_shndx,
-				      reloc.get_r_offset(), is_ifunc);
+	  if (parameters->options().experimental_use_relr())
+	    {
+	      Relr_section* relr_dyn = target->relr_dyn_section(layout);
+	      relr_dyn->add_local_relative(object, r_sym, output_section,
+					    data_shndx, reloc.get_r_offset());
+	    }
+	  else
+	    {
+	      Reloc_section* rel_dyn = target->rel_dyn_section(layout);
+	      // If we are to add more other reloc types than R_ARM_ABS32,
+	      // we need to add check_non_pic(object, r_type) here.
+	      rel_dyn->add_local_relative(object, r_sym, elfcpp::R_ARM_RELATIVE,
+					  output_section, data_shndx,
+					  reloc.get_r_offset(), is_ifunc);
+	    }
 	}
       break;
 
@@ -8633,11 +8674,23 @@ Target_arm<big_endian>::Scan::local(Symbol_table* symtab,
 	    // dynamic RELATIVE relocation for this symbol's GOT entry.
 	    if (parameters->options().output_is_position_independent())
 	      {
-		Reloc_section* rel_dyn = target->rel_dyn_section(layout);
+		unsigned int got_offset =
+		  object->local_got_offset(r_sym, GOT_TYPE_STANDARD);
 		unsigned int r_sym = elfcpp::elf_r_sym<32>(reloc.get_r_info());
-		rel_dyn->add_local_relative(
-		    object, r_sym, elfcpp::R_ARM_RELATIVE, got,
-		    object->local_got_offset(r_sym, GOT_TYPE_STANDARD));
+		if (parameters->options().experimental_use_relr())
+		  {
+		    Relr_section* relr_dyn =
+		      target->relr_dyn_section(layout);
+		    relr_dyn->add_local_relative(object, r_sym,
+						 got, got_offset);
+		  }
+		else
+		  {
+		    Reloc_section* rel_dyn = target->rel_dyn_section(layout);
+		    rel_dyn->add_local_relative(object, r_sym,
+						elfcpp::R_ARM_RELATIVE,
+						got, got_offset);
+		  }
 	      }
 	  }
       }
@@ -8946,10 +8999,22 @@ Target_arm<big_endian>::Scan::global(Symbol_table* symtab,
 		      || r_type == elfcpp::R_ARM_ABS32_NOI)
 		     && gsym->can_use_relative_reloc(false))
 	      {
-		Reloc_section* rel_dyn = target->rel_dyn_section(layout);
-		rel_dyn->add_global_relative(gsym, elfcpp::R_ARM_RELATIVE,
-					     output_section, object,
-					     data_shndx, reloc.get_r_offset());
+		if (parameters->options().experimental_use_relr())
+		  {
+		    Relr_section* relr_dyn =
+		      target->relr_dyn_section(layout);
+		    relr_dyn->add_global_relative(gsym, output_section,
+						  object, data_shndx,
+						  reloc.get_r_offset());
+		  }
+		else
+		  {
+		    Reloc_section* rel_dyn = target->rel_dyn_section(layout);
+		    rel_dyn->add_global_relative(gsym, elfcpp::R_ARM_RELATIVE,
+						 output_section, object,
+						 data_shndx,
+						 reloc.get_r_offset());
+		  }
 	      }
 	    else
 	      {
@@ -9116,9 +9181,21 @@ Target_arm<big_endian>::Scan::global(Symbol_table* symtab,
 		      gsym->set_needs_dynsym_value();
 		  }
 		if (is_new)
-		  rel_dyn->add_global_relative(
-		      gsym, elfcpp::R_ARM_RELATIVE, got,
-		      gsym->got_offset(GOT_TYPE_STANDARD));
+		  {
+		    unsigned int got_off = gsym->got_offset(GOT_TYPE_STANDARD);
+		    if (parameters->options().experimental_use_relr())
+		      {
+			Relr_section* relr_dyn =
+			  target->relr_dyn_section(layout);
+			relr_dyn->add_global_relative(gsym, got, got_off);
+		      }
+		    else
+		      {
+			rel_dyn->add_global_relative(gsym,
+						     elfcpp::R_ARM_RELATIVE,
+						     got, got_off);
+		      }
+		  }
 	      }
 	  }
       }
@@ -9388,7 +9465,8 @@ Target_arm<big_endian>::do_finalize_sections(
 				  ? NULL
 				  : this->plt_->rel_plt());
   layout->add_target_dynamic_tags(true, this->got_plt_, rel_plt,
-				  this->rel_dyn_, true, false);
+				  this->rel_dyn_, true, false,
+				  this->relr_dyn_);
 
   // Emit any relocs we saved in an attempt to avoid generating COPY
   // relocs.
@@ -12256,14 +12334,38 @@ Target_arm<big_endian>::do_relax(
     Layout* layout,
     const Task* task)
 {
-  // No need to generate stubs if this is a relocatable link.
-  gold_assert(!parameters->options().relocatable());
+  if (pass == 1)
+    {
+      Layout::Section_list::const_iterator p = layout->section_list().begin();
+      for ( ; p != layout->section_list().end(); ++p)
+        {
+          if (is_prefix_of(".relr.dyn", (*p)->name()))
+            break;
+        }
 
-  // If this is the first pass, we need to group input sections into
+      if (p != layout->section_list().end())
+        {
+          Output_section * const os = *p;
+          for (Output_section::Input_section_list::iterator ip = os->input_sections().begin();
+               ip != os->input_sections().end();
+               ++ip)
+            {
+              Relr_section *od = static_cast<Relr_section *>(ip->output_section_data());
+              od->shrink_relocs();
+            }
+        }
+
+      return true;
+    }
+
+  if (parameters->options().relocatable())
+    return false;
+
+  // If this is the second pass, we need to group input sections into
   // stub groups.
   bool done_exidx_fixup = false;
   typedef typename Stub_table_list::iterator Stub_table_iterator;
-  if (pass == 1)
+  if (pass == 2)
     {
       // Determine the stub group size.  The group size is the absolute
       // value of the parameter --stub-group-size.  If --stub-group-size
@@ -12333,7 +12435,7 @@ Target_arm<big_endian>::do_relax(
     }
   else
     {
-      // If this is not the first pass, addresses and file offsets have
+      // If this is not the second pass, addresses and file offsets have
       // been reset at this point, set them here.
       for (Stub_table_iterator sp = this->stub_tables_.begin();
 	   sp != this->stub_tables_.end();

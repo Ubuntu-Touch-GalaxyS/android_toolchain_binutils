@@ -180,6 +180,12 @@ struct Rela_data
   typename Elf_types<size>::Elf_Swxword r_addend;
 };
 
+template<int size>
+struct Relr_data
+{
+  typename Elf_types<size>::Elf_WXword r_data;
+};
+
 // MIPS-64 has a non-standard layout for relocations.
 
 struct Mips64_rel_data

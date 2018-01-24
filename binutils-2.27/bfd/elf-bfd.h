@@ -638,7 +638,7 @@ struct sym_cache
 
 struct elf_size_info {
   unsigned char sizeof_ehdr, sizeof_phdr, sizeof_shdr;
-  unsigned char sizeof_rel, sizeof_rela, sizeof_sym, sizeof_dyn, sizeof_note;
+  unsigned char sizeof_rel, sizeof_rela, sizeof_relr, sizeof_sym, sizeof_dyn, sizeof_note;
 
   /* The size of entries in the .hash section.  */
   unsigned char sizeof_hash_entry;

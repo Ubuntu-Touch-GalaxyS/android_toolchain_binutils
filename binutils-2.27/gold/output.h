@@ -558,7 +558,6 @@ class Output_data
   void
   set_current_data_size_for_child(off_t data_size)
   {
-    gold_assert(!this->is_data_size_valid_);
     this->data_size_ = data_size;
   }
 
@@ -1500,6 +1499,118 @@ class Output_reloc<elfcpp::SHT_RELA, dynamic, size, big_endian>
   Addend addend_;
 };
 
+// The SHT_RELR version of Output_reloc<>.  This is a relative reloc,
+// and holds nothing but an offset.  Rather than duplicate all the fields
+// of the SHT_REL version except for the symbol and relocation type, we
+// simply use an SHT_REL as a proxy.
+
+template<bool dynamic, int size, bool big_endian>
+class Output_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>
+{
+ public:
+  typedef typename elfcpp::Elf_types<size>::Elf_Addr Address;
+  typedef typename elfcpp::Elf_types<size>::Elf_WXword Relr_Data;
+
+  // An uninitialized entry.
+  Output_reloc()
+    : rel_()
+  { }
+
+  // A reloc against a global symbol.
+
+  Output_reloc(Symbol* gsym, Output_data* od, Address address)
+    : rel_(gsym, 0, od, address, true, true, false),
+      jump_(0), bits_(0)
+  { }
+
+  Output_reloc(Symbol* gsym, Sized_relobj<size, big_endian>* relobj,
+	       unsigned int shndx, Address address)
+    : rel_(gsym, 0, relobj, shndx, address, true, true, false),
+      jump_(0), bits_(0)
+  { }
+
+  // A reloc against a local symbol.
+
+  Output_reloc(Sized_relobj<size, big_endian>* relobj,
+	       unsigned int local_sym_index, Output_data* od, Address address,
+	       bool is_section_symbol)
+    : rel_(relobj, local_sym_index, 0, od, address, true,
+	   true, is_section_symbol, false),
+      jump_(0), bits_(0)
+  { }
+
+  Output_reloc(Sized_relobj<size, big_endian>* relobj,
+	       unsigned int local_sym_index, unsigned int shndx,
+	       Address address, bool is_section_symbol)
+    : rel_(relobj, local_sym_index, 0, shndx, address, true,
+	   true, is_section_symbol, false),
+      jump_(0), bits_(0)
+  { }
+
+  // A reloc against the STT_SECTION symbol of an output section.
+
+  Output_reloc(Output_section* os, Output_data* od, Address address)
+    : rel_(os, 0, od, address, true),
+      jump_(0), bits_(0)  { }
+
+  Output_reloc(Output_section* os, Sized_relobj<size, big_endian>* relobj,
+	       unsigned int shndx, Address address)
+    : rel_(os, 0, relobj, shndx, address, true),
+      jump_(0), bits_(0)  { }
+
+  // A relative relocation with no symbol.
+
+  Output_reloc(Output_data* od, Address address)
+    : rel_(0, od, address, true),
+      jump_(0), bits_(0)
+  { }
+
+  Output_reloc(Sized_relobj<size, big_endian>* relobj,
+	       unsigned int shndx, Address address)
+    : rel_(0, relobj, shndx, address, true),
+      jump_(0), bits_(0)
+  { }
+
+  // Return whether this is a RELATIVE relocation.
+  bool
+  is_relative() const
+  { return true; }
+
+  // Return whether this is a relocation which should not use
+  // a symbol, but which obtains its addend from a symbol.
+  bool
+  is_symbolless() const
+  { return true; }
+
+  // If this relocation is against an input section, return the
+  // relocatable object containing the input section.
+  Sized_relobj<size, big_endian>*
+  get_relobj() const
+  { return this->rel_.get_relobj(); }
+
+  // Write the reloc entry to an output view.
+  void
+  write(unsigned char* pov) const;
+
+  // Return whether this reloc should be sorted before the argument
+  // when sorting dynamic relocs.
+  bool
+  sort_before(const Output_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>&
+	      r2) const
+  { return this->rel_.compare(r2.rel_) < 0; }
+
+ public:
+  // The basic reloc.
+  Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian> rel_;
+
+  // Number of words to jump since last offset, maximum 0xff.
+  Relr_Data jump_;
+
+  // Relocations bitmap for addresses starting at the offset,
+  // 24-bits/56-bits.
+  Relr_Data bits_;
+};
+
 // Output_data_reloc_generic is a non-template base class for
 // Output_data_reloc_base.  This gives the generic code a way to hold
 // a pointer to a reloc section.
@@ -1675,7 +1786,7 @@ class Output_data_reloc_base : public Output_data_reloc_generic
       relobj->add_dyn_reloc(this->relocs_.size() - 1);
   }
 
- private:
+ protected:
   typedef std::vector<Output_reloc_type> Relocs;
 
   // The class used to sort the relocations.
@@ -2342,6 +2453,232 @@ class Output_data_reloc<elfcpp::SHT_RELA, dynamic, size, big_endian>
     this->add(od, Output_reloc_type(type, arg, relobj, shndx, address,
 				    addend));
   }
+};
+
+// The SHT_RELR version of Output_data_reloc.
+
+template<bool dynamic, int size, bool big_endian>
+class Output_data_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>
+  : public Output_data_reloc_base<elfcpp::SHT_RELR, dynamic, size, big_endian>
+{
+ private:
+  typedef Output_data_reloc_base<elfcpp::SHT_RELR, dynamic, size,
+				 big_endian> Base;
+  typedef typename elfcpp::Elf_types<size>::Elf_WXword Relr_Data;
+
+ public:
+  typedef typename Base::Output_reloc_type Output_reloc_type;
+  typedef typename Output_reloc_type::Address Address;
+  typedef typename Base::Sort_relocs_comparison Sort_relocs_comparison;
+  typedef typename Base::Relocs Relocs;
+
+  Output_data_reloc()
+    : Output_data_reloc_base<elfcpp::SHT_RELR, dynamic, size, big_endian>(false)
+  { }
+
+  void do_write(Output_file *);
+
+  template<class Output_reloc_writer>
+  void
+  do_write_generic(Output_file *of)
+  {
+    const off_t off = this->offset();
+    const off_t oview_size = this->data_size();
+    unsigned char* const oview = of->get_output_view(off, oview_size);
+
+    unsigned char* pov = oview;
+    for (typename Relocs::const_iterator p = this->relocs_.begin();
+	 p != this->relocs_.end();
+	 ++p)
+      {
+	Output_reloc_writer::write(p, pov);
+	pov += Base::reloc_size;
+        if (p->jump_ == 0)
+          pov += Base::reloc_size;
+      }
+
+    gold_assert(pov - oview == oview_size);
+
+    of->write_output_view(off, oview_size, oview);
+
+    // We no longer need the relocation entries.
+    this->relocs_.clear();
+  }
+
+  void shrink_relocs()
+  {
+    Relocs shrink_relocs;
+    gold_assert(dynamic);
+    shrink_relocs.clear();
+
+    // Always sort the relocs_ vector for RELR relocs.
+    std::sort(this->relocs_.begin(), this->relocs_.end(), Sort_relocs_comparison());
+
+    // Word size in number of bytes, used for computing jump/bits.
+    unsigned int word_size = size / 8;
+
+    // Number of bits to use for the relocations bitmap
+    // (jump field is always 8-bit wide).
+    unsigned int n_bits = size - 8;
+
+    Address prev = 0;
+    off_t addnl_relocs_size = 0;
+    typename Relocs::iterator curr = this->relocs_.begin();
+    while (curr != this->relocs_.end())
+      {
+        Address delta = curr->rel_.get_address() - prev;
+        Relr_Data jump = delta / word_size;
+        bool aligned = (delta % word_size) == 0;
+
+        // Compute bitmap for next relocations that can be folded into curr.
+        Relr_Data bits = 0;
+        typename Relocs::iterator next = curr;
+        while (next != this->relocs_.end())
+          {
+            Address diff = next->rel_.get_address() - curr->rel_.get_address();
+            // If next is too far out, it cannot be folded into curr.
+            if (diff >= (n_bits * word_size))
+              break;
+            // If next is not a multiple of word_size away, it cannot
+            // be folded into curr.
+            if ((diff % word_size) != 0)
+              break;
+            // next can be folded into curr, update the bitmap to include it.
+            bits |= 1ULL << (diff / word_size);
+            ++next;
+          }
+
+        // If jump is too big, or if the delta between curr and prev is not a
+        // multiple of word_size, we need to fallback to using two entries in
+        // the output: the relocations bitmap, followed by the full offset.
+        // This is signaled by setting jump to 0.
+        if (jump > 0xff || !aligned)
+          {
+            jump = 0;
+            addnl_relocs_size += Base::reloc_size;
+          }
+
+        curr->jump_ = jump;
+        curr->bits_ = bits;
+        shrink_relocs.push_back(*curr);
+
+        prev = curr->rel_.get_address();
+        curr = next;
+      }
+
+    // Copy shrink_relocs vector to relocs_
+    this->relocs_.clear();
+    for (typename Relocs::const_iterator p = shrink_relocs.begin();
+         p != shrink_relocs.end();
+         ++p)
+      {
+        this->relocs_.push_back(*p);
+      }
+    this->set_current_data_size(addnl_relocs_size
+                                + (this->relocs_.size() * Base::reloc_size));
+  }
+
+  void
+  add_global_generic(Symbol*, unsigned int, Output_data*, uint64_t, uint64_t)
+  {
+    gold_unreachable();
+  }
+
+  void
+  add_global_generic(Symbol*, unsigned int, Output_data*, Relobj*,
+		     unsigned int, uint64_t, uint64_t)
+  {
+    gold_unreachable();
+  }
+
+  // Add a RELATIVE reloc against a global symbol.  The final relocation
+  // will not reference the symbol.
+
+  void
+  add_global_relative(Symbol* gsym, Output_data* od, Address address)
+  {
+    this->add(od, Output_reloc_type(gsym, od, address));
+  }
+
+  void
+  add_global_relative(Symbol* gsym, Output_data* od,
+		      Sized_relobj<size, big_endian>* relobj,
+		      unsigned int shndx, Address address)
+  {
+    this->add(od, Output_reloc_type(gsym, relobj, shndx, address));
+  }
+
+  void
+  add_local_generic(Relobj*, unsigned int, unsigned int, Output_data*, uint64_t,
+		    uint64_t)
+  {
+    gold_unreachable();
+  }
+
+  void
+  add_local_generic(Relobj*, unsigned int, unsigned int, Output_data*,
+		    unsigned int, uint64_t, uint64_t)
+  {
+    gold_unreachable();
+  }
+
+  // Add a RELATIVE reloc against a local symbol.
+
+  void
+  add_local_relative(Sized_relobj<size, big_endian>* relobj,
+		     unsigned int local_sym_index, Output_data* od,
+		     Address address)
+  {
+    this->add(od, Output_reloc_type(relobj, local_sym_index, od, address,
+				    false));
+  }
+
+  void
+  add_local_relative(Sized_relobj<size, big_endian>* relobj,
+		     unsigned int local_sym_index, Output_data* od,
+		     unsigned int shndx, Address address)
+  {
+    this->add(od, Output_reloc_type(relobj, local_sym_index, shndx, address,
+				    false));
+  }
+
+  void
+  add_output_section_generic(Output_section*, unsigned int, Output_data*,
+			     uint64_t, uint64_t)
+  {
+    gold_unreachable();
+  }
+
+  void
+  add_output_section_generic(Output_section*, unsigned int, Output_data*,
+			     Relobj*, unsigned int, uint64_t, uint64_t)
+  {
+    gold_unreachable();
+  }
+
+  // Add a RELATIVE reloc against an output section symbol.
+
+  void
+  add_output_section_relative(Output_section* os, Output_data* od,
+			      Address address)
+  { this->add(od, Output_reloc_type(os, od, address)); }
+
+  void
+  add_output_section_relative(Output_section* os, Output_data* od,
+			      Sized_relobj<size, big_endian>* relobj,
+			      unsigned int shndx, Address address)
+  { this->add(od, Output_reloc_type(os, relobj, shndx, address)); }
+
+  // Add a relative relocation
+
+  void
+  add_relative(Output_data* od, Address address)
+  { this->add(od, Output_reloc_type(od, address)); }
+
+  void
+  add_relative(Output_data* od, Sized_relobj<size, big_endian>* relobj,
+	       unsigned int shndx, Address address)
+  { this->add(od, Output_reloc_type(relobj, shndx, address)); }
 };
 
 // Output_relocatable_relocs represents a relocation section in a
