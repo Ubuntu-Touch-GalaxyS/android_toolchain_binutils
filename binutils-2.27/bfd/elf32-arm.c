@@ -17966,6 +17966,7 @@ const struct elf_size_info elf32_arm_size_info =
   sizeof (Elf32_External_Shdr),
   sizeof (Elf32_External_Rel),
   sizeof (Elf32_External_Rela),
+  sizeof (Elf32_External_Relr),
   sizeof (Elf32_External_Sym),
   sizeof (Elf32_External_Dyn),
   sizeof (Elf_External_Note),

@@ -2867,6 +2867,8 @@ class Target_aarch64 : public Sized_target<size, big_endian>
   typedef Target_aarch64<size, big_endian> This;
   typedef Output_data_reloc<elfcpp::SHT_RELA, true, size, big_endian>
       Reloc_section;
+  typedef Output_data_reloc<elfcpp::SHT_RELR, true, size, big_endian>
+      Relr_section;
   typedef Relocate_info<size, big_endian> The_relocate_info;
   typedef typename elfcpp::Elf_types<size>::Elf_Addr Address;
   typedef AArch64_relobj<size, big_endian> The_aarch64_relobj;
@@ -2888,8 +2890,8 @@ class Target_aarch64 : public Sized_target<size, big_endian>
     : Sized_target<size, big_endian>(info),
       got_(NULL), plt_(NULL), got_plt_(NULL), got_irelative_(NULL),
       got_tlsdesc_(NULL), global_offset_table_(NULL), rela_dyn_(NULL),
-      rela_irelative_(NULL), copy_relocs_(elfcpp::R_AARCH64_COPY),
-      got_mod_index_offset_(-1U),
+      rela_irelative_(NULL), relr_dyn_(NULL),
+      copy_relocs_(elfcpp::R_AARCH64_COPY), got_mod_index_offset_(-1U),
       tlsdesc_reloc_info_(), tls_base_symbol_defined_(false),
       stub_tables_(), stub_group_size_(0), aarch64_input_section_map_()
   { }
@@ -3150,11 +3152,17 @@ class Target_aarch64 : public Sized_target<size, big_endian>
     return this->do_make_data_plt(layout, got, got_plt, got_irelative);
   }
 
-  // We only need to generate stubs, and hence perform relaxation if we are
-  // not doing relocatable linking.
   virtual bool
   do_may_relax() const
-  { return !parameters->options().relocatable(); }
+  {
+    // If generating '.relr.dyn' section, we need a relaxation pass
+    // to do the shrinking after all the offsets have been populated.
+    if (parameters->options().experimental_use_relr())
+        return true;
+    // We need to generate stubs, and hence perform relaxation if we are
+    // not doing relocatable linking.
+    return !parameters->options().relocatable();
+  }
 
   // Relaxation hook.  This is where we do stub generation.
   virtual bool
@@ -3425,6 +3433,10 @@ class Target_aarch64 : public Sized_target<size, big_endian>
   Reloc_section*
   rela_irelative_section(Layout*);
 
+  // Get the RELR dynamic reloc section, creating it if necessary.
+  Relr_section*
+  relr_dyn_section(Layout*);
+
   // Add a potential copy relocation.
   void
   copy_reloc(Symbol_table* symtab, Layout* layout,
@@ -3489,6 +3501,8 @@ class Target_aarch64 : public Sized_target<size, big_endian>
   Reloc_section* rela_dyn_;
   // The section to use for IRELATIVE relocs.
   Reloc_section* rela_irelative_;
+  // The RELR dynamic reloc section.
+  Relr_section* relr_dyn_;
   // Relocs saved to avoid a COPY reloc.
   Copy_relocs<elfcpp::SHT_RELA, size, big_endian> copy_relocs_;
   // Offset of the GOT entry for the TLS module index.
@@ -3754,6 +3768,23 @@ Target_aarch64<size, big_endian>::rela_irelative_section(Layout* layout)
 		  == this->rela_irelative_->output_section());
     }
   return this->rela_irelative_;
+}
+
+// Get the RELR dynamic reloc section, creating it if necessary.
+
+template<int size, bool big_endian>
+typename Target_aarch64<size, big_endian>::Relr_section*
+Target_aarch64<size, big_endian>::relr_dyn_section(Layout* layout)
+{
+  if (this->relr_dyn_ == NULL)
+    {
+      gold_assert(layout != NULL);
+      this->relr_dyn_ = new Relr_section();
+      layout->add_output_section_data(".relr.dyn", elfcpp::SHT_RELR,
+				      elfcpp::SHF_ALLOC, this->relr_dyn_,
+				      ORDER_DYNAMIC_RELOCS, false);
+    }
+  return this->relr_dyn_;
 }
 
 
@@ -5596,8 +5627,34 @@ Target_aarch64<size, big_endian>::do_relax(
     Layout* layout ,
     const Task* task)
 {
-  gold_assert(!parameters->options().relocatable());
   if (pass == 1)
+    {
+      Layout::Section_list::const_iterator p = layout->section_list().begin();
+      for ( ; p != layout->section_list().end(); ++p)
+        {
+          if (is_prefix_of(".relr.dyn", (*p)->name()))
+            break;
+        }
+
+      if (p != layout->section_list().end())
+        {
+          Output_section * const os = *p;
+          for (Output_section::Input_section_list::iterator ip = os->input_sections().begin();
+               ip != os->input_sections().end();
+               ++ip)
+            {
+              Relr_section *od = static_cast<Relr_section *>(ip->output_section_data());
+              od->shrink_relocs();
+            }
+        }
+
+      return true;
+    }
+
+  if (parameters->options().relocatable())
+    return false;
+
+  if (pass == 2)
     {
       // We don't handle negative stub_group_size right now.
       this->stub_group_size_ = abs(parameters->options().stub_group_size());
@@ -5613,7 +5670,7 @@ Target_aarch64<size, big_endian>::do_relax(
     }
   else
     {
-      // If this is not the first pass, addresses and file offsets have
+      // If this is not the second pass, addresses and file offsets have
       // been reset at this point, set them here.
       for (Stub_table_iterator sp = this->stub_tables_.begin();
 	   sp != this->stub_tables_.end(); ++sp)
@@ -6075,14 +6132,22 @@ Target_aarch64<size, big_endian>::Scan::local(
       // reloction, so that the dynamic loader can relocate it.
       if (parameters->options().output_is_position_independent())
 	{
-	  Reloc_section* rela_dyn = target->rela_dyn_section(layout);
-	  rela_dyn->add_local_relative(object, r_sym,
-				       elfcpp::R_AARCH64_RELATIVE,
-				       output_section,
-				       data_shndx,
-				       rela.get_r_offset(),
-				       rela.get_r_addend(),
-				       is_ifunc);
+	  if (parameters->options().experimental_use_relr())
+	    {
+	      Relr_section* relr_dyn = target->relr_dyn_section(layout);
+	      relr_dyn->add_local_relative(object, r_sym, output_section,
+					   data_shndx, rela.get_r_offset());
+	    }
+	  else
+	    {
+	      Reloc_section* rela_dyn = target->rela_dyn_section(layout);
+	      rela_dyn->add_local_relative(object, r_sym,
+					   elfcpp::R_AARCH64_RELATIVE,
+					   output_section, data_shndx,
+					   rela.get_r_offset(),
+					   rela.get_r_addend(),
+					   is_ifunc);
+	    }
 	}
       break;
 
@@ -6105,15 +6170,22 @@ Target_aarch64<size, big_endian>::Scan::local(
 	else
 	  is_new = got->add_local(object, r_sym, GOT_TYPE_STANDARD);
 	if (is_new && parameters->options().output_is_position_independent())
-	  target->rela_dyn_section(layout)->
-	    add_local_relative(object,
-			       r_sym,
-			       elfcpp::R_AARCH64_RELATIVE,
-			       got,
-			       object->local_got_offset(r_sym,
-							GOT_TYPE_STANDARD),
-			       0,
-			       false);
+	  {
+	    unsigned int got_offset =
+	      object->local_got_offset(r_sym, GOT_TYPE_STANDARD);
+	    if (parameters->options().experimental_use_relr())
+	      {
+		Relr_section* relr_dyn = target->relr_dyn_section(layout);
+		relr_dyn->add_local_relative(object, r_sym, got, got_offset);
+	      }
+	    else
+	      {
+		Reloc_section* rela_dyn = target->rela_dyn_section(layout);
+		rela_dyn->add_local_relative(object, r_sym,
+					     elfcpp::R_AARCH64_RELATIVE,
+					     got, got_offset, 0, false);
+	      }
+	  }
       }
       break;
 
@@ -6369,15 +6441,25 @@ Target_aarch64<size, big_endian>::Scan::global(
 	    else if (r_type == elfcpp::R_AARCH64_ABS64
 		     && gsym->can_use_relative_reloc(false))
 	      {
-		Reloc_section* rela_dyn = target->rela_dyn_section(layout);
-		rela_dyn->add_global_relative(gsym,
-					      elfcpp::R_AARCH64_RELATIVE,
-					      output_section,
-					      object,
-					      data_shndx,
-					      rela.get_r_offset(),
-					      rela.get_r_addend(),
-					      false);
+		if (parameters->options().experimental_use_relr())
+		  {
+		    Relr_section* relr_dyn =
+		      target->relr_dyn_section(layout);
+		    relr_dyn->add_global_relative(gsym, output_section,
+						  object, data_shndx,
+						  rela.get_r_offset());
+		  }
+		else
+		  {
+		    Reloc_section* rela_dyn = target->rela_dyn_section(layout);
+		    rela_dyn->add_global_relative(gsym,
+						  elfcpp::R_AARCH64_RELATIVE,
+						  output_section, object,
+						  data_shndx,
+						  rela.get_r_offset(),
+						  rela.get_r_addend(),
+						  false);
+		  }
 	      }
 	    else
 	      {
@@ -6488,12 +6570,19 @@ Target_aarch64<size, big_endian>::Scan::global(
 		  }
 		if (is_new)
 		  {
-		    rela_dyn->add_global_relative(
-			gsym, elfcpp::R_AARCH64_RELATIVE,
-			got,
-			gsym->got_offset(GOT_TYPE_STANDARD),
-			0,
-			false);
+		    unsigned int got_off = gsym->got_offset(GOT_TYPE_STANDARD);
+		    if (parameters->options().experimental_use_relr())
+		      {
+			Relr_section* relr_dyn =
+			  target->relr_dyn_section(layout);
+			relr_dyn->add_global_relative(gsym, got, got_off);
+		      }
+		    else
+		      {
+			rela_dyn->add_global_relative(gsym,
+						      elfcpp::R_AARCH64_RELATIVE,
+						      got, got_off, 0, false);
+		      }
 		  }
 	      }
 	  }
@@ -6835,7 +6924,8 @@ Target_aarch64<size, big_endian>::do_finalize_sections(
 				  ? NULL
 				  : this->plt_->rela_plt());
   layout->add_target_dynamic_tags(false, this->got_plt_, rel_plt,
-				  this->rela_dyn_, true, false);
+				  this->rela_dyn_, true, false,
+				  this->relr_dyn_);
 
   // Emit any relocs we saved in an attempt to avoid generating COPY
   // relocs.

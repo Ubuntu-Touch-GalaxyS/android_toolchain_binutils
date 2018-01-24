@@ -385,6 +385,10 @@ enum SHT
   SHT_SUNW_versym = 0x6fffffff,
   SHT_GNU_versym = 0x6fffffff,
 
+  // Experimental support for SHT_RELR sections. For details, see proposal
+  // at https://groups.google.com/forum/#!topic/generic-abi/bX460iggiKg
+  SHT_RELR = 0x6fffff00,
+
   SHT_SPARC_GOTDATA = 0x70000000,
 
   // ARM-specific section types.
@@ -762,6 +766,13 @@ enum DT
 
   DT_VERSYM = 0x6ffffff0,
 
+  // Experimental support for SHT_RELR sections. For details, see proposal
+  // at https://groups.google.com/forum/#!topic/generic-abi/bX460iggiKg
+  DT_RELR = 0x6fffe000,
+  DT_RELRSZ = 0x6fffe001,
+  DT_RELRENT = 0x6fffe003,
+  DT_RELRCOUNT = 0x6fffe005,
+
   // Specify the value of _GLOBAL_OFFSET_TABLE_.
   DT_PPC_GOT = 0x70000000,
 
@@ -1020,6 +1031,7 @@ struct Elf_sizes
   // Sizes of ELF reloc entries.
   static const int rel_size = sizeof(internal::Rel_data<size>);
   static const int rela_size = sizeof(internal::Rela_data<size>);
+  static const int relr_size = sizeof(internal::Relr_data<size>);
   // Size of ELF dynamic entry.
   static const int dyn_size = sizeof(internal::Dyn_data<size>);
   // Size of ELF version structures.
@@ -1664,6 +1676,49 @@ class Rela_write
  private:
   internal::Rela_data<size>* p_;
 };
+
+// Accessor class for an ELF Relr relocation.
+
+template<int size, bool big_endian>
+class Relr
+{
+ public:
+  Relr(const unsigned char* p)
+    : p_(reinterpret_cast<const internal::Relr_data<size>*>(p))
+  { }
+
+  template<typename File>
+  Relr(File* file, typename File::Location loc)
+    : p_(reinterpret_cast<const internal::Relr_data<size>*>(
+	   file->view(loc.file_offset, loc.data_size).data()))
+  { }
+
+  typename Elf_types<size>::Elf_Addr
+  get_r_data() const
+  { return Convert<size, big_endian>::convert_host(this->p_->r_data); }
+
+ private:
+  const internal::Relr_data<size>* p_;
+};
+
+// Writer class for an ELF Relr relocation.
+
+template<int size, bool big_endian>
+class Relr_write
+{
+ public:
+  Relr_write(unsigned char* p)
+    : p_(reinterpret_cast<internal::Relr_data<size>*>(p))
+  { }
+
+  void
+  put_r_data(typename Elf_types<size>::Elf_Addr v)
+  { this->p_->r_data = Convert<size, big_endian>::convert_host(v); }
+
+ private:
+  internal::Relr_data<size>* p_;
+};
+
 
 // MIPS-64 has a non-standard relocation layout.
 

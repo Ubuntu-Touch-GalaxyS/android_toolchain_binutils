@@ -1019,6 +1019,80 @@ slurp_rel_relocs (FILE * file,
   return 1;
 }
 
+static bfd_boolean
+slurp_relr_relocs (FILE * file,
+		   unsigned long relr_offset,
+		   unsigned long relr_size,
+		   Elf_Internal_Rela ** relrsp,
+		   unsigned long * nrelrsp)
+{
+  Elf_Internal_Rela * relrs;
+  size_t nrelrs;
+  unsigned int i;
+
+  if (is_32bit_elf)
+    {
+      Elf32_External_Relr * erelrs;
+
+      erelrs = (Elf32_External_Relr *) get_data (NULL, file, relr_offset, 1,
+                                                 relr_size, _("32-bit relocation data"));
+      if (!erelrs)
+	return FALSE;
+
+      nrelrs = relr_size / sizeof (Elf32_External_Relr);
+
+      relrs = (Elf_Internal_Rela *) cmalloc (nrelrs, sizeof (Elf_Internal_Rela));
+
+      if (relrs == NULL)
+	{
+	  free (erelrs);
+	  error (_("out of memory parsing relocs\n"));
+	  return FALSE;
+	}
+
+      for (i = 0; i < nrelrs; i++)
+	{
+	  relrs[i].r_offset = BYTE_GET (erelrs[i].r_data);
+	  relrs[i].r_info   = 0;
+	  relrs[i].r_addend = 0;
+	}
+
+      free (erelrs);
+    }
+  else
+    {
+      Elf64_External_Relr * erelrs;
+
+      erelrs = (Elf64_External_Relr *) get_data (NULL, file, relr_offset, 1,
+                                                 relr_size, _("64-bit relocation data"));
+      if (!erelrs)
+	return FALSE;
+
+      nrelrs = relr_size / sizeof (Elf64_External_Relr);
+
+      relrs = (Elf_Internal_Rela *) cmalloc (nrelrs, sizeof (Elf_Internal_Rela));
+
+      if (relrs == NULL)
+	{
+	  free (erelrs);
+	  error (_("out of memory parsing relocs\n"));
+	  return FALSE;
+	}
+
+      for (i = 0; i < nrelrs; i++)
+	{
+	  relrs[i].r_offset = BYTE_GET (erelrs[i].r_data);
+	  relrs[i].r_info   = 0;
+	  relrs[i].r_addend = 0;
+	}
+
+      free (erelrs);
+    }
+  *relrsp = relrs;
+  *nrelrsp = nrelrs;
+  return 1;
+}
+
 /* Returns the reloc type extracted from the reloc info field.  */
 
 static unsigned int
@@ -1072,6 +1146,7 @@ dump_relocations (FILE * file,
 		  char * strtab,
 		  unsigned long strtablen,
 		  int is_rela,
+		  int is_relr,
 		  int is_dynsym)
 {
   unsigned int i;
@@ -1083,6 +1158,11 @@ dump_relocations (FILE * file,
   if (is_rela)
     {
       if (!slurp_rela_relocs (file, rel_offset, rel_size, &rels, &rel_size))
+	return;
+    }
+  else if (is_relr)
+    {
+      if (!slurp_relr_relocs (file, rel_offset, rel_size, &rels, &rel_size))
 	return;
     }
   else
@@ -1100,6 +1180,13 @@ dump_relocations (FILE * file,
 	  else
 	    printf (_(" Offset     Info    Type            Sym.Value  Sym. Name + Addend\n"));
 	}
+      else if (is_relr)
+	{
+	  if (do_wide)
+	    printf (_(" Data       Info    Type\n"));
+	  else
+	    printf (_(" Data       Info    Type\n"));
+	}
       else
 	{
 	  if (do_wide)
@@ -1116,6 +1203,13 @@ dump_relocations (FILE * file,
 	    printf (_("    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend\n"));
 	  else
 	    printf (_("  Offset          Info           Type           Sym. Value    Sym. Name + Addend\n"));
+	}
+      else if (is_relr)
+	{
+	  if (do_wide)
+	    printf (_("    Data               Info             Type\n"));
+	  else
+	    printf (_("  Data            Info           Type\n"));
 	}
       else
 	{
@@ -1478,7 +1572,9 @@ dump_relocations (FILE * file,
 	  break;
 	}
 
-      if (rtype == NULL)
+      if (is_relr)
+        printf (do_wide ? "RELATIVE COMPRESSED" : "RELR");
+      else if (rtype == NULL)
 	printf (_("unrecognized: %-7lx"), (unsigned long) type & 0xffffffff);
       else
 	printf (do_wide ? "%-22.22s" : "%-17.17s", rtype);
@@ -1996,6 +2092,9 @@ get_dynamic_type (unsigned long type)
     case DT_REL:	return "REL";
     case DT_RELSZ:	return "RELSZ";
     case DT_RELENT:	return "RELENT";
+    case DT_RELR:	return "RELR";
+    case DT_RELRSZ:	return "RELRSZ";
+    case DT_RELRENT:	return "RELRENT";
     case DT_PLTREL:	return "PLTREL";
     case DT_DEBUG:	return "DEBUG";
     case DT_TEXTREL:	return "TEXTREL";
@@ -2032,6 +2131,7 @@ get_dynamic_type (unsigned long type)
 
     case DT_TLSDESC_GOT: return "TLSDESC_GOT";
     case DT_TLSDESC_PLT: return "TLSDESC_PLT";
+    case DT_RELRCOUNT:	return "RELRCOUNT";
     case DT_RELACOUNT:	return "RELACOUNT";
     case DT_RELCOUNT:	return "RELCOUNT";
     case DT_FLAGS_1:	return "FLAGS_1";
@@ -3992,6 +4092,7 @@ get_section_type_name (unsigned int sh_type)
     case SHT_SYMTAB:		return "SYMTAB";
     case SHT_STRTAB:		return "STRTAB";
     case SHT_RELA:		return "RELA";
+    case SHT_RELR:		return "RELR";
     case SHT_HASH:		return "HASH";
     case SHT_DYNAMIC:		return "DYNAMIC";
     case SHT_NOTE:		return "NOTE";
@@ -6604,11 +6705,13 @@ static struct
   int reloc;
   int size;
   int rela;
+  int relr;
 } dynamic_relocations [] =
 {
-    { "REL", DT_REL, DT_RELSZ, FALSE },
-    { "RELA", DT_RELA, DT_RELASZ, TRUE },
-    { "PLT", DT_JMPREL, DT_PLTRELSZ, UNKNOWN }
+    { "REL", DT_REL, DT_RELSZ, FALSE, FALSE },
+    { "RELA", DT_RELA, DT_RELASZ, TRUE, FALSE },
+    { "RELR", DT_RELR, DT_RELRSZ, FALSE, TRUE },
+    { "PLT", DT_JMPREL, DT_PLTRELSZ, UNKNOWN, FALSE }
 };
 
 /* Process the reloc section.  */
@@ -6625,7 +6728,7 @@ process_relocs (FILE * file)
 
   if (do_using_dynamic)
     {
-      int is_rela;
+      int is_rela, is_relr;
       const char * name;
       int has_dynamic_reloc;
       unsigned int i;
@@ -6635,6 +6738,7 @@ process_relocs (FILE * file)
       for (i = 0; i < ARRAY_SIZE (dynamic_relocations); i++)
 	{
 	  is_rela = dynamic_relocations [i].rela;
+	  is_relr = dynamic_relocations [i].relr;
 	  name = dynamic_relocations [i].name;
 	  rel_size = dynamic_info [dynamic_relocations [i].size];
 	  rel_offset = dynamic_info [dynamic_relocations [i].reloc];
@@ -6666,7 +6770,7 @@ process_relocs (FILE * file)
 				rel_size,
 				dynamic_symbols, num_dynamic_syms,
 				dynamic_strings, dynamic_strings_length,
-				is_rela, 1);
+				is_rela, is_relr, 1);
 	    }
 	}
 
@@ -6687,7 +6791,8 @@ process_relocs (FILE * file)
 	   i++, section++)
 	{
 	  if (   section->sh_type != SHT_RELA
-	      && section->sh_type != SHT_REL)
+	      && section->sh_type != SHT_REL
+	      && section->sh_type != SHT_RELR)
 	    continue;
 
 	  rel_offset = section->sh_offset;
@@ -6696,7 +6801,7 @@ process_relocs (FILE * file)
 	  if (rel_size)
 	    {
 	      Elf_Internal_Shdr * strsec;
-	      int is_rela;
+	      int is_rela, is_relr;
 
 	      printf (_("\nRelocation section "));
 
@@ -6709,6 +6814,7 @@ process_relocs (FILE * file)
 		 rel_offset, (unsigned long) (rel_size / section->sh_entsize));
 
 	      is_rela = section->sh_type == SHT_RELA;
+	      is_relr = section->sh_type == SHT_RELR;
 
 	      if (section->sh_link != 0
 		  && section->sh_link < elf_header.e_shnum)
@@ -6742,7 +6848,7 @@ process_relocs (FILE * file)
 
 		  dump_relocations (file, rel_offset, rel_size,
 				    symtab, nsyms, strtab, strtablen,
-				    is_rela,
+				    is_rela, is_relr,
 				    symsec->sh_type == SHT_DYNSYM);
 		  if (strtab)
 		    free (strtab);
@@ -6750,7 +6856,9 @@ process_relocs (FILE * file)
 		}
 	      else
 		dump_relocations (file, rel_offset, rel_size,
-				  NULL, 0, NULL, 0, is_rela, 0);
+				  NULL, 0, NULL, 0,
+				  is_rela, is_relr,
+				  0);
 
 	      found = 1;
 	    }
