@@ -73,8 +73,8 @@ def configure(arch, host, install_dir, src_dir):
     configure_host = {
         'darwin': 'x86_64-apple-darwin',
         'linux': 'x86_64-linux-gnu',
-        'win': 'i586-pc-mingw32msvc',
-        'win64': 'x86_64-pc-mingw32msvc',
+        'win': 'i686-w64-mingw32',
+        'win64': 'x86_64-w64-mingw32',
     }[host]
 
     sysroot = ndk.paths.sysroot_path(ndk.abis.arch_to_toolchain(arch))
