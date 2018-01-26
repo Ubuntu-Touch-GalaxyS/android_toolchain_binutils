@@ -1520,13 +1520,13 @@ class Output_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>
 
   Output_reloc(Symbol* gsym, Output_data* od, Address address)
     : rel_(gsym, 0, od, address, true, true, false),
-      jump_(0), bits_(0)
+      bits_(0)
   { }
 
   Output_reloc(Symbol* gsym, Sized_relobj<size, big_endian>* relobj,
 	       unsigned int shndx, Address address)
     : rel_(gsym, 0, relobj, shndx, address, true, true, false),
-      jump_(0), bits_(0)
+      bits_(0)
   { }
 
   // A reloc against a local symbol.
@@ -1536,7 +1536,7 @@ class Output_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>
 	       bool is_section_symbol)
     : rel_(relobj, local_sym_index, 0, od, address, true,
 	   true, is_section_symbol, false),
-      jump_(0), bits_(0)
+      bits_(0)
   { }
 
   Output_reloc(Sized_relobj<size, big_endian>* relobj,
@@ -1544,31 +1544,31 @@ class Output_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>
 	       Address address, bool is_section_symbol)
     : rel_(relobj, local_sym_index, 0, shndx, address, true,
 	   true, is_section_symbol, false),
-      jump_(0), bits_(0)
+      bits_(0)
   { }
 
   // A reloc against the STT_SECTION symbol of an output section.
 
   Output_reloc(Output_section* os, Output_data* od, Address address)
     : rel_(os, 0, od, address, true),
-      jump_(0), bits_(0)  { }
+      bits_(0)  { }
 
   Output_reloc(Output_section* os, Sized_relobj<size, big_endian>* relobj,
 	       unsigned int shndx, Address address)
     : rel_(os, 0, relobj, shndx, address, true),
-      jump_(0), bits_(0)  { }
+      bits_(0)  { }
 
   // A relative relocation with no symbol.
 
   Output_reloc(Output_data* od, Address address)
     : rel_(0, od, address, true),
-      jump_(0), bits_(0)
+      bits_(0)
   { }
 
   Output_reloc(Sized_relobj<size, big_endian>* relobj,
 	       unsigned int shndx, Address address)
     : rel_(0, relobj, shndx, address, true),
-      jump_(0), bits_(0)
+      bits_(0)
   { }
 
   // Return whether this is a RELATIVE relocation.
@@ -1603,11 +1603,9 @@ class Output_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>
   // The basic reloc.
   Output_reloc<elfcpp::SHT_REL, dynamic, size, big_endian> rel_;
 
-  // Number of words to jump since last offset, maximum 0xff.
-  Relr_Data jump_;
-
-  // Relocations bitmap for addresses starting at the offset,
-  // 24-bits/56-bits.
+  // Relocation bitmap for encoding offsets continuing from previous entry.
+  //   https://groups.google.com/d/msg/generic-abi/bX460iggiKg/Pi9aSwwABgAJ
+  // 31-bits/63-bits.
   Relr_Data bits_;
 };
 
@@ -2493,8 +2491,6 @@ class Output_data_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>
       {
 	Output_reloc_writer::write(p, pov);
 	pov += Base::reloc_size;
-        if (p->jump_ == 0)
-          pov += Base::reloc_size;
       }
 
     gold_assert(pov - oview == oview_size);
@@ -2512,58 +2508,60 @@ class Output_data_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>
     shrink_relocs.clear();
 
     // Always sort the relocs_ vector for RELR relocs.
-    std::sort(this->relocs_.begin(), this->relocs_.end(), Sort_relocs_comparison());
+    std::sort(this->relocs_.begin(), this->relocs_.end(),
+              Sort_relocs_comparison());
 
-    // Word size in number of bytes, used for computing jump/bits.
+    // Word size in number of bytes, used for computing the offsets bitmap.
     unsigned int word_size = size / 8;
 
-    // Number of bits to use for the relocations bitmap
-    // (jump field is always 8-bit wide).
-    unsigned int n_bits = size - 8;
+    // Number of bits to use for the relocation offsets bitmap.
+    // These many relative relocations can be encoded in a single entry.
+    unsigned int n_bits = size - 1;
 
-    Address prev = 0;
-    off_t addnl_relocs_size = 0;
+    Address base = 0;
     typename Relocs::iterator curr = this->relocs_.begin();
     while (curr != this->relocs_.end())
       {
-        Address delta = curr->rel_.get_address() - prev;
-        Relr_Data jump = delta / word_size;
-        bool aligned = (delta % word_size) == 0;
+        Address current = curr->rel_.get_address();
+        // Odd addresses are not supported in SHT_RELR.
+        gold_assert(current%2 == 0);
 
-        // Compute bitmap for next relocations that can be folded into curr.
         Relr_Data bits = 0;
         typename Relocs::iterator next = curr;
-        while (next != this->relocs_.end())
+        if ((base > 0) && (base <= current))
           {
-            Address diff = next->rel_.get_address() - curr->rel_.get_address();
-            // If next is too far out, it cannot be folded into curr.
-            if (diff >= (n_bits * word_size))
-              break;
-            // If next is not a multiple of word_size away, it cannot
-            // be folded into curr.
-            if ((diff % word_size) != 0)
-              break;
-            // next can be folded into curr, update the bitmap to include it.
-            bits |= 1ULL << (diff / word_size);
-            ++next;
+            while (next != this->relocs_.end())
+              {
+                Address delta = next->rel_.get_address() - base;
+                // If next is too far out, it cannot be folded into curr.
+                if (delta >= (n_bits * word_size))
+                  break;
+                // If next is not a multiple of word_size away, it cannot
+                // be folded into curr.
+                if ((delta % word_size) != 0)
+                  break;
+                // next can be folded into curr, add it to the bitmap.
+                bits |= 1ULL << (delta / word_size);
+                ++next;
+              }
           }
 
-        // If jump is too big, or if the delta between curr and prev is not a
-        // multiple of word_size, we need to fallback to using two entries in
-        // the output: the relocations bitmap, followed by the full offset.
-        // This is signaled by setting jump to 0.
-        if (jump > 0xff || !aligned)
-          {
-            jump = 0;
-            addnl_relocs_size += Base::reloc_size;
-          }
-
-        curr->jump_ = jump;
         curr->bits_ = bits;
         shrink_relocs.push_back(*curr);
-
-        prev = curr->rel_.get_address();
-        curr = next;
+        if (bits == 0)
+          {
+            // This is not a continuation entry, only one offset was
+            // consumed. Set base offset for subsequent bitmap entries.
+            base = current + word_size;
+            ++curr;
+          }
+        else
+          {
+            // This is a continuation entry encoding multiple offsets
+            // in a bitmap. Advance base offset by n_bits words.
+            base += n_bits * word_size;
+            curr = next;
+          }
       }
 
     // Copy shrink_relocs vector to relocs_
@@ -2574,8 +2572,7 @@ class Output_data_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>
       {
         this->relocs_.push_back(*p);
       }
-    this->set_current_data_size(addnl_relocs_size
-                                + (this->relocs_.size() * Base::reloc_size));
+    this->set_current_data_size(this->relocs_.size() * Base::reloc_size);
   }
 
   void

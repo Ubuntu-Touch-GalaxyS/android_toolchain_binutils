@@ -1231,29 +1231,17 @@ void
 Output_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>::write(
     unsigned char* pov) const
 {
-  typedef Output_data_reloc_base<elfcpp::SHT_RELR, dynamic, size,
-				 big_endian> Base;
   elfcpp::Relr_write<size, big_endian> orel(pov);
-
-  if (this->jump_ == 0)
+  if (this->bits_ == 0)
     {
-      // Delta from previous offset is either too big,
-      // or is not a multiple of word_size. Encode as
-      // two words: relocations bitmap and the offset.
-      orel.put_r_data(this->bits_);
-      pov += Base::reloc_size;
-      elfcpp::Relr_write<size, big_endian> orel(pov);
+      // This is not a continuation entry. Output full address.
       orel.put_r_data(this->rel_.get_address());
-      return;
     }
-
-  // Encode jump:bits in a relr relocation entry.
-  // High order 8-bits always encode the jump.
-  // The remaining bits encode the bitmap.
-  Relr_Data data;
-  data = this->jump_ << (size - 8);
-  data = data | this->bits_;
-  orel.put_r_data(data);
+  else
+    {
+      // This is a continuation entry. Output the bitmap.
+      orel.put_r_data((this->bits_<<1)|1);
+    }
 }
 
 // Output_data_reloc_base methods.
