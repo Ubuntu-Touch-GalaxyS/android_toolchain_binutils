@@ -184,7 +184,11 @@ static const bfd_target * plugin_object_p (bfd *);
 static void *
 dlopen (const char *file, int mode ATTRIBUTE_UNUSED)
 {
-  return LoadLibrary (file);
+  // Use LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR to search the loaded library's
+  // directory to satisfy dependencies.
+  return LoadLibraryEx(file, NULL,
+                       LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR |
+                           LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
 }
 
 static void *
@@ -200,9 +204,20 @@ dlclose (void *handle)
   return 0;
 }
 
+static const char *
+dlerror (void)
+{
+  DWORD error = GetLastError();
+  static char error_buf[512];
+  FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, error,
+                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), error_buf,
+                sizeof(error_buf), NULL);
+  return error_buf;
+}
+
 #endif /* !defined (HAVE_DLFCN_H) && defined (HAVE_WINDOWS_H)  */
 
-#ifndef HAVE_DLFCN_H
+#if !defined (HAVE_DLFCN_H) && !defined (HAVE_WINDOWS_H)
 static const char *
 dlerror (void)
 {
