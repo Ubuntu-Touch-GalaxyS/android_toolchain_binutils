@@ -162,7 +162,7 @@ def dist(dist_dir, base_dir, package_name):
     else:
         compress_arg = '-j'
 
-    package_path = os.path.join(dist_dir, package_name + 'tar.bz2')
+    package_path = os.path.join(dist_dir, package_name + '.tar.bz2')
     cmd = [
         'tar', compress_arg, '-cf', package_path, '-C', base_dir, package_name,
     ]
