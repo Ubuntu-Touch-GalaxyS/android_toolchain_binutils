@@ -139,6 +139,10 @@ def configure(arch, host, install_dir, src_dir):
         env['CFLAGS'] = '-m32'
         env['CXXFLAGS'] = '-m32'
         env['LDFLAGS'] = '-m32'
+    else:
+        env['CFLAGS'] = '-m64'
+        env['CXXFLAGS'] = '-m64'
+        env['LDFLAGS'] = '-m64'
 
     env_args = ['env'] + ['='.join([k, v]) for k, v in env.items()]
     check_call(env_args + configure_args)
