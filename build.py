@@ -112,7 +112,7 @@ def configure(arch, host, install_dir, src_dir):
         env['MACOSX_DEPLOYMENT_TARGET'] = '10.6'
     elif host == 'linux':
         toolchain = ndk.paths.android_path(
-            'prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.11-4.8')
+            'prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.15-4.8')
         toolchain_prefix = 'x86_64-linux'
     elif is_windows:
         toolchain = ndk.paths.android_path(
