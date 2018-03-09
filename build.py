@@ -84,6 +84,7 @@ def configure(arch, host, install_dir, src_dir):
         '--host={}'.format(configure_host),
         '--enable-initfini-array',
         '--enable-plugins',
+        '--disable-nls',
         '--with-sysroot={}'.format(sysroot),
         '--prefix={}'.format(install_dir),
     ]
