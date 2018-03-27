@@ -8537,11 +8537,13 @@ Target_arm<big_endian>::Scan::local(Symbol_table* symtab,
       if (parameters->options().output_is_position_independent())
 	{
 	  unsigned int r_sym = elfcpp::elf_r_sym<32>(reloc.get_r_info());
-	  if (parameters->options().experimental_use_relr())
+	  Arm_address r_offset = reloc.get_r_offset();
+	  if (parameters->options().experimental_use_relr()
+	      && r_offset%2 == 0)
 	    {
 	      Relr_section* relr_dyn = target->relr_dyn_section(layout);
 	      relr_dyn->add_local_relative(object, r_sym, output_section,
-					    data_shndx, reloc.get_r_offset());
+					    data_shndx, r_offset);
 	    }
 	  else
 	    {
@@ -8550,7 +8552,7 @@ Target_arm<big_endian>::Scan::local(Symbol_table* symtab,
 	      // we need to add check_non_pic(object, r_type) here.
 	      rel_dyn->add_local_relative(object, r_sym, elfcpp::R_ARM_RELATIVE,
 					  output_section, data_shndx,
-					  reloc.get_r_offset(), is_ifunc);
+					  r_offset, is_ifunc);
 	    }
 	}
       break;
@@ -8677,7 +8679,8 @@ Target_arm<big_endian>::Scan::local(Symbol_table* symtab,
 		unsigned int got_offset =
 		  object->local_got_offset(r_sym, GOT_TYPE_STANDARD);
 		unsigned int r_sym = elfcpp::elf_r_sym<32>(reloc.get_r_info());
-		if (parameters->options().experimental_use_relr())
+		if (parameters->options().experimental_use_relr()
+		    && got_offset%2 == 0)
 		  {
 		    Relr_section* relr_dyn =
 		      target->relr_dyn_section(layout);
@@ -8999,13 +9002,15 @@ Target_arm<big_endian>::Scan::global(Symbol_table* symtab,
 		      || r_type == elfcpp::R_ARM_ABS32_NOI)
 		     && gsym->can_use_relative_reloc(false))
 	      {
-		if (parameters->options().experimental_use_relr())
+		Arm_address r_offset = reloc.get_r_offset();
+		if (parameters->options().experimental_use_relr()
+		    && r_offset%2 == 0)
 		  {
 		    Relr_section* relr_dyn =
 		      target->relr_dyn_section(layout);
 		    relr_dyn->add_global_relative(gsym, output_section,
 						  object, data_shndx,
-						  reloc.get_r_offset());
+						  r_offset);
 		  }
 		else
 		  {
@@ -9013,7 +9018,7 @@ Target_arm<big_endian>::Scan::global(Symbol_table* symtab,
 		    rel_dyn->add_global_relative(gsym, elfcpp::R_ARM_RELATIVE,
 						 output_section, object,
 						 data_shndx,
-						 reloc.get_r_offset());
+						 r_offset);
 		  }
 	      }
 	    else
@@ -9183,7 +9188,8 @@ Target_arm<big_endian>::Scan::global(Symbol_table* symtab,
 		if (is_new)
 		  {
 		    unsigned int got_off = gsym->got_offset(GOT_TYPE_STANDARD);
-		    if (parameters->options().experimental_use_relr())
+		    if (parameters->options().experimental_use_relr()
+			&& got_off%2 == 0)
 		      {
 			Relr_section* relr_dyn =
 			  target->relr_dyn_section(layout);

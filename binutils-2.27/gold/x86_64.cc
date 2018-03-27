@@ -445,6 +445,7 @@ class Target_x86_64 : public Sized_target<size, false>
   // uses only Elf64_Rela relocation entries with explicit addends."
   typedef Output_data_reloc<elfcpp::SHT_RELA, true, size, false> Reloc_section;
   typedef Output_data_reloc<elfcpp::SHT_RELR, true, size, false> Relr_section;
+  typedef typename elfcpp::Elf_types<size>::Elf_Addr Address;
 
   Target_x86_64(const Target::Target_info* info = &x86_64_info)
     : Sized_target<size, false>(info),
@@ -2547,13 +2548,15 @@ Target_x86_64<size>::Scan::local(Symbol_table* symtab,
       if (parameters->options().output_is_position_independent())
 	{
 	  unsigned int r_sym = elfcpp::elf_r_sym<size>(reloc.get_r_info());
+	  Address r_offset = reloc.get_r_offset();
 	  if (size == 64
 	      && !is_ifunc
-	      && parameters->options().experimental_use_relr())
+	      && parameters->options().experimental_use_relr()
+	      && r_offset%2 == 0)
 	    {
 	      Relr_section* relr_dyn = target->relr_dyn_section(layout);
 	      relr_dyn->add_local_relative(object, r_sym, output_section,
-					   data_shndx, reloc.get_r_offset());
+					   data_shndx, r_offset);
 	    }
 	  else
 	    {
@@ -2563,7 +2566,7 @@ Target_x86_64<size>::Scan::local(Symbol_table* symtab,
 					    ? elfcpp::R_X86_64_RELATIVE64
 					    : elfcpp::R_X86_64_RELATIVE),
 					   output_section, data_shndx,
-					   reloc.get_r_offset(),
+					   r_offset,
 					   reloc.get_r_addend(), is_ifunc);
 	    }
 	}
@@ -2583,12 +2586,14 @@ Target_x86_64<size>::Scan::local(Symbol_table* symtab,
 	  if (size == 32 && r_type == elfcpp::R_X86_64_32)
 	    {
 	      unsigned int r_sym = elfcpp::elf_r_sym<size>(reloc.get_r_info());
-	      if (!is_ifunc && parameters->options().experimental_use_relr())
+	      Address r_offset = reloc.get_r_offset();
+	      if (!is_ifunc
+		  && parameters->options().experimental_use_relr()
+		  && r_offset%2 == 0)
 		{
 		  Relr_section* relr_dyn = target->relr_dyn_section(layout);
 		  relr_dyn->add_local_relative(object, r_sym, output_section,
-					       data_shndx,
-					       reloc.get_r_offset());
+					       data_shndx, r_offset);
 		}
 	      else
 		{
@@ -2596,7 +2601,7 @@ Target_x86_64<size>::Scan::local(Symbol_table* symtab,
 		  rela_dyn->add_local_relative(object, r_sym,
 					       elfcpp::R_X86_64_RELATIVE,
 					       output_section, data_shndx,
-					       reloc.get_r_offset(),
+					       r_offset,
 					       reloc.get_r_addend(), is_ifunc);
 		}
 	      break;
@@ -2714,7 +2719,8 @@ Target_x86_64<size>::Scan::local(Symbol_table* symtab,
 		  }
 		else if (size == 64
 			 && !is_ifunc
-			 && parameters->options().experimental_use_relr())
+			 && parameters->options().experimental_use_relr()
+			 && got_offset%2 == 0)
 		  {
 		    Relr_section* relr_dyn =
 		      target->relr_dyn_section(layout);
@@ -3089,13 +3095,15 @@ Target_x86_64<size>::Scan::global(Symbol_table* symtab,
 		      || (size == 32 && r_type == elfcpp::R_X86_64_32))
 		     && gsym->can_use_relative_reloc(false))
 	      {
-		if (parameters->options().experimental_use_relr())
+		Address r_offset = reloc.get_r_offset();
+		if (parameters->options().experimental_use_relr()
+		    && r_offset%2 == 0)
 		  {
 		    Relr_section* relr_dyn =
 		      target->relr_dyn_section(layout);
 		    relr_dyn->add_global_relative(gsym, output_section,
 						  object, data_shndx,
-						  reloc.get_r_offset());
+						  r_offset);
 		  }
 		else
 		  {
@@ -3103,8 +3111,7 @@ Target_x86_64<size>::Scan::global(Symbol_table* symtab,
 		    rela_dyn->add_global_relative(gsym,
 						  elfcpp::R_X86_64_RELATIVE,
 						  output_section, object,
-						  data_shndx,
-						  reloc.get_r_offset(),
+						  data_shndx, r_offset,
 						  reloc.get_r_addend(), false);
 		  }
 	      }
@@ -3238,7 +3245,8 @@ Target_x86_64<size>::Scan::global(Symbol_table* symtab,
 		if (is_new)
 		  {
 		    unsigned int got_off = gsym->got_offset(GOT_TYPE_STANDARD);
-		    if (parameters->options().experimental_use_relr())
+		    if (parameters->options().experimental_use_relr()
+			&& got_off%2 == 0)
 		      {
 			Relr_section* relr_dyn =
 			  target->relr_dyn_section(layout);
