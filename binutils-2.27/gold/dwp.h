@@ -84,6 +84,11 @@ gold_exit(Exit_status status) ATTRIBUTE_NORETURN;
 extern void
 gold_fatal(const char* format, ...) ATTRIBUTE_NORETURN ATTRIBUTE_PRINTF_1;
 
+// This function is called to issue an error.  This will cause gold to
+// eventually exit with failure.
+extern void
+gold_error(const char* msg, ...) ATTRIBUTE_PRINTF_1;
+
 // This function is called to issue a warning.
 extern void
 gold_warning(const char* msg, ...) ATTRIBUTE_PRINTF_1;
