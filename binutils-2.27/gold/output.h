@@ -27,6 +27,10 @@
 #include <list>
 #include <vector>
 
+// __STDC_FORMAT_MACROS is needed to turn on macros in <inttypes.h>.
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
+
 #include "elfcpp.h"
 #include "mapfile.h"
 #include "layout.h"
@@ -2523,8 +2527,15 @@ class Output_data_reloc<elfcpp::SHT_RELR, dynamic, size, big_endian>
     while (curr != this->relocs_.end())
       {
         Address current = curr->rel_.get_address();
-        // Odd addresses are not supported in SHT_RELR.
-        gold_assert(current%2 == 0);
+        if (current%2 != 0)
+          {
+            // Odd addresses are not supported in SHT_RELR.
+            gold_error(
+              _("odd offset for RELR relocation (0x%" PRIx64 "), "
+                "pass --no-experimental-use-relr flag "
+                "to disable RELR dynamic relocations"),
+              static_cast<uint64_t>(current));
+          }
 
         Relr_Data bits = 0;
         typename Relocs::iterator next = curr;
