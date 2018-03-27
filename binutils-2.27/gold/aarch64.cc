@@ -6132,11 +6132,13 @@ Target_aarch64<size, big_endian>::Scan::local(
       // reloction, so that the dynamic loader can relocate it.
       if (parameters->options().output_is_position_independent())
 	{
-	  if (parameters->options().experimental_use_relr())
+	  Address r_offset = rela.get_r_offset();
+	  if (parameters->options().experimental_use_relr()
+	      && r_offset%2 == 0)
 	    {
 	      Relr_section* relr_dyn = target->relr_dyn_section(layout);
 	      relr_dyn->add_local_relative(object, r_sym, output_section,
-					   data_shndx, rela.get_r_offset());
+					   data_shndx, r_offset);
 	    }
 	  else
 	    {
@@ -6144,7 +6146,7 @@ Target_aarch64<size, big_endian>::Scan::local(
 	      rela_dyn->add_local_relative(object, r_sym,
 					   elfcpp::R_AARCH64_RELATIVE,
 					   output_section, data_shndx,
-					   rela.get_r_offset(),
+					   r_offset,
 					   rela.get_r_addend(),
 					   is_ifunc);
 	    }
@@ -6173,7 +6175,8 @@ Target_aarch64<size, big_endian>::Scan::local(
 	  {
 	    unsigned int got_offset =
 	      object->local_got_offset(r_sym, GOT_TYPE_STANDARD);
-	    if (parameters->options().experimental_use_relr())
+	    if (parameters->options().experimental_use_relr()
+		&& got_offset%2 == 0)
 	      {
 		Relr_section* relr_dyn = target->relr_dyn_section(layout);
 		relr_dyn->add_local_relative(object, r_sym, got, got_offset);
@@ -6441,13 +6444,15 @@ Target_aarch64<size, big_endian>::Scan::global(
 	    else if (r_type == elfcpp::R_AARCH64_ABS64
 		     && gsym->can_use_relative_reloc(false))
 	      {
-		if (parameters->options().experimental_use_relr())
+		Address r_offset = rela.get_r_offset();
+		if (parameters->options().experimental_use_relr()
+		    && r_offset%2 == 0)
 		  {
 		    Relr_section* relr_dyn =
 		      target->relr_dyn_section(layout);
 		    relr_dyn->add_global_relative(gsym, output_section,
 						  object, data_shndx,
-						  rela.get_r_offset());
+						  r_offset);
 		  }
 		else
 		  {
@@ -6456,7 +6461,7 @@ Target_aarch64<size, big_endian>::Scan::global(
 						  elfcpp::R_AARCH64_RELATIVE,
 						  output_section, object,
 						  data_shndx,
-						  rela.get_r_offset(),
+						  r_offset,
 						  rela.get_r_addend(),
 						  false);
 		  }
@@ -6571,7 +6576,8 @@ Target_aarch64<size, big_endian>::Scan::global(
 		if (is_new)
 		  {
 		    unsigned int got_off = gsym->got_offset(GOT_TYPE_STANDARD);
-		    if (parameters->options().experimental_use_relr())
+		    if (parameters->options().experimental_use_relr()
+			&& got_off%2 == 0)
 		      {
 			Relr_section* relr_dyn =
 			  target->relr_dyn_section(layout);
