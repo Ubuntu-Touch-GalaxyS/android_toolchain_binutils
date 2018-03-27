@@ -32,9 +32,11 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#ifndef __STDC_FORMAT_MACROS
 // __STDC_FORMAT_MACROS is needed to turn on macros in <inttypes.h>.
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
+#endif
 
 #include "system.h"
 
