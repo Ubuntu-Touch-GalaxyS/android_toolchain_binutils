@@ -60,6 +60,12 @@ def chdir(path):
     os.chdir(path)
 
 
+def install_file(src, dst):
+    """shutil.copy2 with logging."""
+    logger().info('copy %s %s', src, dst)
+    shutil.copy2(src, dst)
+
+
 def check_call(cmd, *args, **kwargs):
     """subprocess.check_call with logging."""
     logger().info('check_call %s', subprocess.list2cmdline(cmd))
@@ -84,6 +90,7 @@ def configure(arch, host, install_dir, src_dir):
         '--host={}'.format(configure_host),
         '--enable-initfini-array',
         '--enable-plugins',
+        '--enable-threads',
         '--disable-nls',
         '--with-sysroot={}'.format(sysroot),
         '--prefix={}'.format(install_dir),
@@ -96,12 +103,6 @@ def configure(arch, host, install_dir, src_dir):
         # Gold for aarch64 currently emits broken debug info.
         # https://issuetracker.google.com/70838247
         configure_args.append('--enable-gold=default')
-
-    if not is_windows:
-        # Multithreaded linking is implemented with pthreads, which we
-        # historically couldn't use on Windows.
-        # TODO: Try enabling this now that we have winpthreads in mingw.
-        configure_args.append('--enable-threads')
 
     env = {}
 
@@ -158,9 +159,30 @@ def build(jobs):
     check_call(['make', '-j', str(jobs)])
 
 
-def install(jobs):
+def install_winpthreads(is_windows32, install_dir):
+    """Installs the winpthreads runtime to the Windows bin directory."""
+    lib_name = 'libwinpthread-1.dll'
+    mingw_dir = ndk.paths.android_path(
+        'prebuilts/gcc/linux-x86/host/x86_64-w64-mingw32-4.8',
+        'x86_64-w64-mingw32')
+    # Yes, this indeed may be found in bin/ because the executables are the
+    # 64-bit version by default.
+    pthread_dir = 'lib32' if is_windows32 else 'bin'
+    lib_path = os.path.join(mingw_dir, pthread_dir, lib_name)
+
+    lib_install = os.path.join(install_dir, 'bin', lib_name)
+    install_file(lib_path, lib_install)
+
+
+def install(jobs, arch, host, install_dir):
     """Installs binutils."""
     check_call(['make', 'install-strip', '-j', str(jobs)])
+
+    if host in ('win', 'win64'):
+        arch_install_dir = os.path.join(
+            install_dir, ndk.abis.arch_to_triple(arch))
+        install_winpthreads(host == 'win', install_dir)
+        install_winpthreads(host == 'win', arch_install_dir)
 
 
 def dist(dist_dir, base_dir, package_name):
@@ -237,7 +259,7 @@ def main():
 
         install_timer = ndk.timer.Timer()
         with install_timer:
-            install(args.jobs)
+            install(args.jobs, args.arch, args.host, install_dir)
     finally:
         chdir(orig_dir)
 
