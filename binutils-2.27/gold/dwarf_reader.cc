@@ -1961,7 +1961,7 @@ Sized_dwarf_line_info<size, big_endian>::read_header_tables_v5(
 	}
       gold_debug(DEBUG_LOCATION, "File %3d: %s",
 		 static_cast<int>(file_list.size()), path);
-      file_list.push_back(std::make_pair<int, std::string>(dirindex, path));
+      file_list.push_back(std::make_pair(dirindex, path));
     }
 
   delete[] types;
