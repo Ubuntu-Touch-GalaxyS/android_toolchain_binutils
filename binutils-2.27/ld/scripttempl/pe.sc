@@ -92,6 +92,7 @@ SECTIONS
     ${RELOCATING+ *(.gnu.linkonce.t.*)}
     *(.glue_7t)
     *(.glue_7)
+    ${CONSTRUCTING+. = ALIGN(4);}
     ${CONSTRUCTING+ ___CTOR_LIST__ = .; __CTOR_LIST__ = . ;
 			LONG (-1);*(.ctors); *(.ctor); *(SORT(.ctors.*));  LONG (0); }
     ${CONSTRUCTING+ ___DTOR_LIST__ = .; __DTOR_LIST__ = . ;
