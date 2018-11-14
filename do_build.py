@@ -140,13 +140,13 @@ def configure(arch, host, install_dir, src_dir):
     env['CXX'] = cxx
     env['STRIP'] = strip
     if m32:
-        env['CFLAGS'] = '-m32'
-        env['CXXFLAGS'] = '-m32'
-        env['LDFLAGS'] = '-m32'
+        env['CFLAGS'] = '-O2 -m32'
+        env['CXXFLAGS'] = '-O2 -m32'
+        env['LDFLAGS'] = '-O2 -m32'
     else:
-        env['CFLAGS'] = '-m64'
-        env['CXXFLAGS'] = '-m64'
-        env['LDFLAGS'] = '-m64'
+        env['CFLAGS'] = '-O2 -m64'
+        env['CXXFLAGS'] = '-O2 -m64'
+        env['LDFLAGS'] = '-O2 -m64'
 
     env_args = ['env'] + ['='.join([k, v]) for k, v in env.items()]
     check_call(env_args + configure_args)
