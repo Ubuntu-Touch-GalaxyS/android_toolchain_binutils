@@ -27,12 +27,13 @@ import subprocess
 THIS_DIR = os.path.realpath(os.path.dirname(__file__))
 site.addsitedir(os.path.join(THIS_DIR, '../../ndk'))
 
-# pylint: disable=wrong-import-position
-import ndk.abis  # pylint: disable=import-error
-import ndk.ext.shutil  # pylint: disable=import-error
-import ndk.paths  # pylint: disable=import-error
-import ndk.timer  # pylint: disable=import-error
-# pylint: enable=wrong-import-position
+# pylint: disable=import-error,wrong-import-position
+import ndk.abis
+import ndk.ext.shutil
+from ndk.hosts import Host
+import ndk.paths
+import ndk.timer
+# pylint: enable=import-error,wrong-import-position
 
 
 def logger():
@@ -70,15 +71,13 @@ def check_call(cmd, *args, **kwargs):
     subprocess.check_call(cmd, *args, **kwargs)
 
 
-def configure(arch, host, install_dir, src_dir):
+def configure(arch, host: Host, install_dir, src_dir):
     """Configures binutils."""
-    is_windows = host in ('win', 'win64')
-
     configure_host = {
-        'darwin': 'x86_64-apple-darwin',
-        'linux': 'x86_64-linux-gnu',
-        'win': 'i686-w64-mingw32',
-        'win64': 'x86_64-w64-mingw32',
+        Host.Darwin: 'x86_64-apple-darwin',
+        Host.Linux: 'x86_64-linux-gnu',
+        Host.Windows: 'i686-w64-mingw32',
+        Host.Windows64: 'x86_64-w64-mingw32',
     }[host]
 
     sysroot = ndk.paths.sysroot_path(ndk.abis.arch_to_toolchain(arch))
@@ -105,20 +104,20 @@ def configure(arch, host, install_dir, src_dir):
     env = {}
 
     m32 = False
-    if host == 'darwin':
+    if host == Host.Darwin:
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/darwin-x86/host/i686-apple-darwin-4.2.1')
         toolchain_prefix = 'i686-apple-darwin10'
         env['MACOSX_DEPLOYMENT_TARGET'] = '10.6'
-    elif host == 'linux':
+    elif host == Host.Linux:
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.15-4.8')
         toolchain_prefix = 'x86_64-linux'
-    elif is_windows:
+    elif host.is_windows:
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/linux-x86/host/x86_64-w64-mingw32-4.8')
         toolchain_prefix = 'x86_64-w64-mingw32'
-        if host == 'win':
+        if host == Host.Windows:
             m32 = True
     else:
         raise NotImplementedError
@@ -127,7 +126,7 @@ def configure(arch, host, install_dir, src_dir):
     cxx = os.path.join(toolchain, 'bin', '{}-g++'.format(toolchain_prefix))
 
     # Our darwin prebuilts are gcc *only*. No binutils.
-    if host == 'darwin':
+    if host == Host.Darwin:
         ar = 'ar'
         strip = 'strip'
     else:
@@ -202,10 +201,18 @@ def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser()
 
+    def host_from_arg(arg: str) -> Host:
+        return {
+            'darwin': Host.Darwin,
+            'linux': Host.Linux,
+            'win': Host.Windows,
+            'win64': Host.Windows64,
+        }[arg]
+
     parser.add_argument(
         '--arch', choices=ndk.abis.ALL_ARCHITECTURES, required=True)
     parser.add_argument(
-        '--host', choices=('darwin', 'linux', 'win', 'win64'), required=True)
+        '--host', choices=Host, type=host_from_arg, required=True)
 
     parser.add_argument(
         '--clean', action='store_true',
@@ -227,10 +234,16 @@ def main():
 
     out_dir = ndk.paths.get_out_dir()
     dist_dir = ndk.paths.get_dist_dir(out_dir)
-    base_build_dir = os.path.join(
-        out_dir, 'binutils', args.host, args.arch)
+    artifact_host = {
+        Host.Darwin: 'darwin',
+        Host.Linux: 'linux',
+        Host.Windows: 'win',
+        Host.Windows64: 'win64',
+    }[args.host]
+    base_build_dir = os.path.join(out_dir, 'binutils', artifact_host,
+                                  args.arch)
     build_dir = os.path.join(base_build_dir, 'build')
-    package_name = 'binutils-{}-{}'.format(args.arch, args.host)
+    package_name = 'binutils-{}-{}'.format(args.arch, artifact_host)
     install_dir = os.path.join(base_build_dir, 'install', package_name)
     binutils_path = os.path.join(THIS_DIR, 'binutils-2.27')
 
