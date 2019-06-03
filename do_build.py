@@ -29,7 +29,6 @@ site.addsitedir(os.path.join(THIS_DIR, '../../ndk'))
 
 # pylint: disable=import-error,wrong-import-position
 import ndk.abis
-import ndk.ext.shutil
 from ndk.hosts import Host
 import ndk.paths
 import ndk.timer
@@ -184,7 +183,7 @@ def install(jobs, arch, host, install_dir):
 
 def dist(dist_dir, base_dir, package_name):
     """Packages binutils for distribution."""
-    has_pbzip2 = ndk.ext.shutil.which('pbzip2') is not None
+    has_pbzip2 = shutil.which('pbzip2') is not None
     if has_pbzip2:
         compress_arg = '--use-compress-prog=pbzip2'
     else:
