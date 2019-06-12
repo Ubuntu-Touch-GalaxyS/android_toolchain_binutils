@@ -75,7 +75,6 @@ def configure(arch, host: Host, install_dir, src_dir):
     configure_host = {
         Host.Darwin: 'x86_64-apple-darwin',
         Host.Linux: 'x86_64-linux-gnu',
-        Host.Windows: 'i686-w64-mingw32',
         Host.Windows64: 'x86_64-w64-mingw32',
     }[host]
 
@@ -102,7 +101,6 @@ def configure(arch, host: Host, install_dir, src_dir):
 
     env = {}
 
-    m32 = False
     if host == Host.Darwin:
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/darwin-x86/host/i686-apple-darwin-4.2.1')
@@ -116,8 +114,6 @@ def configure(arch, host: Host, install_dir, src_dir):
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/linux-x86/host/x86_64-w64-mingw32-4.8')
         toolchain_prefix = 'x86_64-w64-mingw32'
-        if host == Host.Windows:
-            m32 = True
     else:
         raise NotImplementedError
 
@@ -137,14 +133,9 @@ def configure(arch, host: Host, install_dir, src_dir):
     env['CC'] = cc
     env['CXX'] = cxx
     env['STRIP'] = strip
-    if m32:
-        env['CFLAGS'] = '-O2 -m32'
-        env['CXXFLAGS'] = '-O2 -m32'
-        env['LDFLAGS'] = '-O2 -m32'
-    else:
-        env['CFLAGS'] = '-O2 -m64'
-        env['CXXFLAGS'] = '-O2 -m64'
-        env['LDFLAGS'] = '-O2 -m64'
+    env['CFLAGS'] = '-O2 -m64'
+    env['CXXFLAGS'] = '-O2 -m64'
+    env['LDFLAGS'] = '-O2 -m64'
 
     env_args = ['env'] + ['='.join([k, v]) for k, v in env.items()]
     check_call(env_args + configure_args)
@@ -204,7 +195,6 @@ def parse_args():
         return {
             'darwin': Host.Darwin,
             'linux': Host.Linux,
-            'win': Host.Windows,
             'win64': Host.Windows64,
         }[arg]
 
@@ -236,7 +226,6 @@ def main():
     artifact_host = {
         Host.Darwin: 'darwin',
         Host.Linux: 'linux',
-        Host.Windows: 'win',
         Host.Windows64: 'win64',
     }[args.host]
     base_build_dir = os.path.join(out_dir, 'binutils', artifact_host,
