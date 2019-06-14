@@ -2220,10 +2220,8 @@ class Target_arm : public Sized_target<32, big_endian>
     int arch = attr->int_value();
     if (parameters->options().fix_arm1176())
       return (arch == elfcpp::TAG_CPU_ARCH_V6T2
-	      || arch == elfcpp::TAG_CPU_ARCH_V7
-	      || arch == elfcpp::TAG_CPU_ARCH_V6_M
-	      || arch == elfcpp::TAG_CPU_ARCH_V6S_M
-	      || arch == elfcpp::TAG_CPU_ARCH_V7E_M);
+	      || (arch >= elfcpp::TAG_CPU_ARCH_V7
+                  && arch <= elfcpp::MAX_TAG_CPU_ARCH));
     else
       return (arch != elfcpp::TAG_CPU_ARCH_PRE_V4
 	      && arch != elfcpp::TAG_CPU_ARCH_V4
