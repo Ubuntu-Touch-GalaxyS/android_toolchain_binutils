@@ -165,7 +165,7 @@ def install(jobs, arch, host, install_dir):
     """Installs binutils."""
     check_call(['make', 'install-strip', '-j', str(jobs)])
 
-    if host in ('win', 'win64'):
+    if host.is_windows:
         arch_install_dir = os.path.join(
             install_dir, ndk.abis.arch_to_triple(arch))
         install_winpthreads(host == 'win', install_dir)
