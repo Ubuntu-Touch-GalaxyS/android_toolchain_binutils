@@ -19,6 +19,7 @@ import argparse
 import logging
 import multiprocessing
 import os
+from pathlib import Path
 import shutil
 import site
 import subprocess
@@ -187,6 +188,20 @@ def dist(dist_dir, base_dir, package_name):
     subprocess.check_call(cmd)
 
 
+def copy_logs_to_dist_dir(build_dir: Path, base_log_dir: Path) -> None:
+    """Preserves any relevant log files from the build directory."""
+    log_file = 'config.log'
+    log_dir = base_log_dir / 'autoconf'
+    for root, _, files in os.walk(build_dir):
+        root_path = Path(root)
+        if log_file not in files:
+            continue
+        rel_path = Path(root).relative_to(build_dir)
+        dest_dir = log_dir / rel_path
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(str(root_path / log_file), str(dest_dir / log_file))
+
+
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser()
@@ -259,6 +274,9 @@ def main():
         install_timer = ndk.timer.Timer()
         with install_timer:
             install(args.jobs, args.arch, args.host, install_dir)
+    except subprocess.CalledProcessError:
+        copy_logs_to_dist_dir(Path(build_dir), Path(dist_dir) / 'logs')
+        raise
     finally:
         chdir(orig_dir)
 
