@@ -157,7 +157,23 @@ GCC_NO_EXECUTABLES
 AC_PROG_CC
 AC_GNU_SOURCE
 AC_SYS_LARGEFILE
-AC_PROG_CPP_WERROR
+# Android edit:
+# This behavior is disabled when building for Mac because we still use GCC to
+# build binutils, and the GCC is old enough that it will always emit a warning
+# about not being able to understand kern.osversion. The warning does not seem
+# to prevent the compiler from working.
+#
+# This change was originally made to libiberty in
+# https://gcc.gnu.org/ml/gcc-patches/2003-09/msg01666.html. It claims the patch
+# was made to fix configure on FreeBSD, which we don't target, so presumably we
+# don't need the patch.
+case "${host_os}" in
+  darwin*)
+    ;;
+  *)
+    AC_PROG_CPP_WERROR
+    ;;
+esac
 
 ACX_PROG_CC_WARNING_OPTS([-W -Wall -Wwrite-strings -Wc++-compat \
 			  -Wstrict-prototypes], [ac_libiberty_warn_cflags])
