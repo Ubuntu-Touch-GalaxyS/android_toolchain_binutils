@@ -274,10 +274,8 @@ def main():
         install_timer = ndk.timer.Timer()
         with install_timer:
             install(args.jobs, args.arch, args.host, install_dir)
-    except subprocess.CalledProcessError:
-        copy_logs_to_dist_dir(Path(build_dir), Path(dist_dir) / 'logs')
-        raise
     finally:
+        copy_logs_to_dist_dir(Path(build_dir), Path(dist_dir) / 'logs')
         chdir(orig_dir)
 
     package_timer = ndk.timer.Timer()
