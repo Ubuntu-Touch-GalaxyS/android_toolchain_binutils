@@ -106,7 +106,7 @@ def configure(arch, host: Host, install_dir, src_dir):
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/darwin-x86/host/i686-apple-darwin-4.2.1')
         toolchain_prefix = 'i686-apple-darwin10'
-        env['MACOSX_DEPLOYMENT_TARGET'] = '10.9'
+        env['MACOSX_DEPLOYMENT_TARGET'] = '10.8'
     elif host == Host.Linux:
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.15-4.8')
