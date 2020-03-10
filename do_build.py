@@ -71,6 +71,24 @@ def check_call(cmd, *args, **kwargs):
     subprocess.check_call(cmd, *args, **kwargs)
 
 
+def check_output(cmd, *args, **kwargs):
+    """subprocess.check_call with logging."""
+    logger().info('check_output %s', subprocess.list2cmdline(cmd))
+    return subprocess.check_output(cmd, *args, **kwargs)
+
+
+def get_osx_deployment_target():
+    """Determines which macOS deployment target should be used."""
+    major, minor, _ = check_output(['sw_vers', '-productVersion']).split('.')
+    assert major == '10'
+    if minor == '8':
+        return '10.8'
+    elif minor == '10':
+        return '10.9'
+    else:
+        raise RuntimeError(f'Unconfigured macOS version: {major}.{minor}')
+
+
 def configure(arch, host: Host, install_dir, src_dir):
     """Configures binutils."""
     configure_host = {
@@ -106,7 +124,7 @@ def configure(arch, host: Host, install_dir, src_dir):
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/darwin-x86/host/i686-apple-darwin-4.2.1')
         toolchain_prefix = 'i686-apple-darwin10'
-        env['MACOSX_DEPLOYMENT_TARGET'] = '10.8'
+        env['MACOSX_DEPLOYMENT_TARGET'] = get_osx_deployment_target()
     elif host == Host.Linux:
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.15-4.8')
