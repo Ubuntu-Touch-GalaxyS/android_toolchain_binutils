@@ -79,14 +79,14 @@ def check_output(cmd, *args, **kwargs):
 
 def get_osx_deployment_target():
     """Determines which macOS deployment target should be used."""
-    major, minor, _ = check_output(['sw_vers', '-productVersion']).split('.')
+    major, minor, _ = check_output(['sw_vers', '-productVersion'],
+                                   encoding='utf-8').split('.')
     assert major == '10'
     if minor == '8':
         return '10.8'
-    elif minor == '10':
+    if minor == '10':
         return '10.9'
-    else:
-        raise RuntimeError(f'Unconfigured macOS version: {major}.{minor}')
+    raise RuntimeError(f'Unconfigured macOS version: {major}.{minor}')
 
 
 def configure(arch, host: Host, install_dir, src_dir):
