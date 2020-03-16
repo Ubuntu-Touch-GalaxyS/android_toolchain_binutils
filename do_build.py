@@ -120,11 +120,32 @@ def configure(arch, host: Host, install_dir, src_dir):
 
     env = {}
 
+    flags = ['-O2', '-m64']
     if host == Host.Darwin:
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/darwin-x86/host/i686-apple-darwin-4.2.1')
         toolchain_prefix = 'i686-apple-darwin10'
-        env['MACOSX_DEPLOYMENT_TARGET'] = get_osx_deployment_target()
+        deployment_target = get_osx_deployment_target()
+        # These are supposed to be synonymous, but it seems that neither is
+        # quite working as expected. Using just the flag locally causes a
+        # warning to be emitted stating that the compile and link are using
+        # different versions (with the compile version being whatever the
+        # machine happens to be), and using just the environment variable
+        # appears to not work when configuring gold. It appears that the
+        # environment is not being properly preserved?
+        #
+        # Using both should cause no harm. We'll still be getting the warning
+        # in the broken part of gold's configure, but it will allow configure
+        # to get the right answers and it should behave correctly at build
+        # time.
+        #
+        # If at any point we do end up with a successful build where neither of
+        # these arguments worked correctly, it seems it will default to either
+        # the version the toolchain was built against (10.4) or the version of
+        # the build machine (currently 10.10 at the latest). Since 10.10 is the
+        # lowest version of macOS that we support, that's still fine.
+        env['MACOSX_DEPLOYMENT_TARGET'] = deployment_target
+        flags.append(f'-mmacosx-version-min={deployment_target}')
     elif host == Host.Linux:
         toolchain = ndk.paths.android_path(
             'prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.15-4.8')
@@ -152,9 +173,9 @@ def configure(arch, host: Host, install_dir, src_dir):
     env['CC'] = cc
     env['CXX'] = cxx
     env['STRIP'] = strip
-    env['CFLAGS'] = '-O2 -m64'
-    env['CXXFLAGS'] = '-O2 -m64'
-    env['LDFLAGS'] = '-O2 -m64'
+    env['CFLAGS'] = ' '.join(flags)
+    env['CXXFLAGS'] = ' '.join(flags)
+    env['LDFLAGS'] = ' '.join(flags)
 
     env_args = ['env'] + ['='.join([k, v]) for k, v in env.items()]
     check_call(env_args + configure_args)
